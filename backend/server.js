@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { createUser, loginUser } from './src/utils/auth.js';
+import { createUser, loginUser } from '../src/utils/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;

@@ -9,7 +9,7 @@ import Blog from './pages/Blog';
 import Chat from './pages/Chat';
 import Analytics from './pages/Analytics';
 import Login from './pages/Login';
- 
+
 function AppContent() {
   const location = useLocation();
   const isLoginPage = location.pathname === '/login';

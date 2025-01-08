@@ -3,20 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card';
+import { cn } from "../lib/utils";
+import { Icons } from '../components/ui/icons';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Alert, AlertDescription } from '../components/ui/alert';
-import { Icons } from '../components/ui/icons';
 
 const formSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -44,7 +35,7 @@ export default function Login() {
     setError('');
 
     try {
-      console.log('Submitting data:', data); // Debug log
+      console.log('Submitting data:', data);
       const endpoint = activeTab === 'login' ? 'http://localhost:3001/api/login' : 'http://localhost:3001/api/register';
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -53,7 +44,7 @@ export default function Login() {
       });
 
       const result = await response.json();
-      console.log('Server response:', result); // Debug log
+      console.log('Server response:', result);
 
       if (!response.ok) {
         throw new Error(result.error || 'Server error');
@@ -66,7 +57,7 @@ export default function Login() {
         setError(result.error || 'An error occurred');
       }
     } catch (err) {
-      console.error('Error:', err); // Debug log
+      console.error('Error:', err);
       setError(err.message || 'Failed to connect to server');
     } finally {
       setIsLoading(false);
@@ -74,140 +65,161 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold tracking-tight">
-            Welcome to F1 Insider
-          </CardTitle>
-          <CardDescription>
-            Enter your credentials to access your account
-          </CardDescription>
-        </CardHeader>
-        <Tabs value={activeTab} onValueChange={(value) => {
-          setActiveTab(value);
-          reset();
-          setError('');
-        }}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login">Login</TabsTrigger>
-            <TabsTrigger value="register">Register</TabsTrigger>
-          </TabsList>
-          <TabsContent value="login">
-            <CardContent className="p-6">
-              {error && (
-                <Alert variant="destructive" className="mb-6">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    {...register('email')}
-                    placeholder="john@example.com"
-                  />
-                  {errors.email && (
-                    <p className="text-sm text-destructive">{errors.email.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    {...register('password')}
-                  />
-                  {errors.password && (
-                    <p className="text-sm text-destructive">{errors.password.message}</p>
-                  )}
-                </div>
-                <Button className="w-full" type="submit" disabled={isLoading}>
-                  {isLoading && (
-                    <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Sign In
-                </Button>
-              </form>
-            </CardContent>
-          </TabsContent>
-          <TabsContent value="register">
-            <CardContent className="p-6">
-              {error && (
-                <Alert variant="destructive" className="mb-6">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    {...register('username')}
-                    placeholder="johndoe"
-                  />
-                  {errors.username && (
-                    <p className="text-sm text-destructive">{errors.username.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    {...register('email')}
-                    placeholder="john@example.com"
-                  />
-                  {errors.email && (
-                    <p className="text-sm text-destructive">{errors.email.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    {...register('password')}
-                  />
-                  {errors.password && (
-                    <p className="text-sm text-destructive">{errors.password.message}</p>
-                  )}
-                </div>
-                <Button className="w-full" type="submit" disabled={isLoading}>
-                  {isLoading && (
-                    <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Create Account
-                </Button>
-              </form>
-            </CardContent>
-          </TabsContent>
-        </Tabs>
-        <CardFooter className="flex flex-col space-y-4">
-          <div className="relative w-full">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                or continue with
-              </span>
-            </div>
+    <>
+      <div className="container relative h-screen flex-col items-center justify-center grid lg:max-w-none lg:grid-cols-2 lg:px-0">
+        <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r">
+          <div className="absolute inset-0 bg-black" />
+          <div className="relative z-20 flex items-center text-lg font-medium">
+            <img src="/f1-logo.png" alt="F1 Logo" className="h-8 w-auto mr-2" />
+            F1 Insider
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Button variant="outline" className="w-full">
-              <Icons.google className="mr-2 h-4 w-4" />
-              Google
-            </Button>
-            <Button variant="outline" className="w-full">
-              <Icons.github className="mr-2 h-4 w-4" />
-              GitHub
-            </Button>
+          <div className="relative z-20 mt-auto">
+            <blockquote className="space-y-2">
+              <p className="text-lg">
+                "Join the F1 community and stay up to date with the latest news, analysis, and discussions."
+              </p>
+              <footer className="text-sm">Max Verstappen</footer>
+            </blockquote>
           </div>
-        </CardFooter>
-      </Card>
-    </div>
+        </div>
+        <div className="lg:p-8">
+          <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+            <div className="flex flex-col space-y-2 text-center">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {activeTab === 'login' ? 'Welcome back' : 'Create an account'}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {activeTab === 'login' 
+                  ? 'Enter your credentials to access your account' 
+                  : 'Enter your details to create your account'}
+              </p>
+            </div>
+            {error && (
+              <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
+                {error}
+              </div>
+            )}
+            <div className="grid gap-6">
+              <form onSubmit={handleSubmit(onSubmit)}>
+                <div className="grid gap-4">
+                  {activeTab === 'register' && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="username">Username</Label>
+                      <Input
+                        id="username"
+                        placeholder="johndoe"
+                        type="text"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        disabled={isLoading}
+                        {...register('username')}
+                      />
+                      {errors.username && (
+                        <p className="text-sm text-destructive">{errors.username.message}</p>
+                      )}
+                    </div>
+                  )}
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      placeholder="name@example.com"
+                      type="email"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      autoCorrect="off"
+                      disabled={isLoading}
+                      {...register('email')}
+                    />
+                    {errors.email && (
+                      <p className="text-sm text-destructive">{errors.email.message}</p>
+                    )}
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      autoCapitalize="none"
+                      autoComplete="current-password"
+                      disabled={isLoading}
+                      {...register('password')}
+                    />
+                    {errors.password && (
+                      <p className="text-sm text-destructive">{errors.password.message}</p>
+                    )}
+                  </div>
+                  <Button disabled={isLoading}>
+                    {isLoading && (
+                      <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    {activeTab === 'login' ? 'Sign In' : 'Create Account'}
+                  </Button>
+                </div>
+              </form>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                <Button 
+                  variant="outline" 
+                  className="bg-white hover:bg-gray-50" 
+                  disabled={isLoading}
+                >
+                  <Icons.google className="mr-2 h-4 w-4" />
+                  Google
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="bg-white hover:bg-gray-50" 
+                  disabled={isLoading}
+                >
+                  <Icons.github className="mr-2 h-4 w-4" />
+                  Github
+                </Button>
+              </div>
+            </div>
+            <p className="px-8 text-center text-sm text-muted-foreground">
+              {activeTab === 'login' ? (
+                <>
+                  Don't have an account?{" "}
+                  <span
+                    className="text-primary underline underline-offset-4 hover:text-primary/90 cursor-pointer"
+                    onClick={() => {
+                      setActiveTab('register');
+                      reset();
+                      setError('');
+                    }}
+                  >
+                    Sign up
+                  </span>
+                </>
+              ) : (
+                <>
+                  Already have an account?{" "}
+                  <span
+                    className="text-primary underline underline-offset-4 hover:text-primary/90 cursor-pointer"
+                    onClick={() => {
+                      setActiveTab('login');
+                      reset();
+                      setError('');
+                    }}
+                  >
+                    Sign in
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

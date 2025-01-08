@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box } from '@mui/material';
@@ -10,25 +10,34 @@ import Chat from './pages/Chat';
 import Analytics from './pages/Analytics';
 import Login from './pages/Login';
 
-function App() {
+function AppContent() {
+  const location = useLocation();
+  const isLoginPage = location.pathname === '/login';
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Router>
-        <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-          <Navbar />
-          <Box component="main">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/blog" element={<Blog />} />
-              <Route path="/chat" element={<Chat />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/login" element={<Login />} />
-            </Routes>
-          </Box>
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+        {!isLoginPage && <Navbar />}
+        <Box component="main">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/blog" element={<Blog />} />
+            <Route path="/chat" element={<Chat />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/login" element={<Login />} />
+          </Routes>
         </Box>
-      </Router>
+      </Box>
     </ThemeProvider>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 

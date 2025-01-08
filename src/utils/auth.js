@@ -1,8 +1,9 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Database from 'better-sqlite3';
+import path from 'path';
 
-const db = new Database('sqlite.db');
+const db = new Database(path.join(process.cwd(), 'backend', 'sqlite.db'));
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 export const hashPassword = async (password) => {

@@ -17,9 +17,9 @@ function AppContent() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <Box sx={{ minHeight: '100vh', width: '100vw', bgcolor: 'background.default' }}>
         {!isLoginPage && <Navbar />}
-        <Box component="main">
+        <Box component="main" sx={{ width: '100%' }}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/blog" element={<Blog />} />

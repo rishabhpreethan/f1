@@ -14,15 +14,22 @@ const Navbar = () => {
 
   return (
     <AppBar 
-      position="fixed" 
+      position="static" 
       sx={{ 
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         backdropFilter: 'blur(8px)',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+        height: '48px',
+        zIndex: 1000,
       }}
     >
       <Container maxWidth="xl">
-        <Toolbar sx={{ py: 1 }}>
+        <Toolbar 
+          sx={{ 
+            minHeight: '48px !important',
+            py: 0
+          }}
+        >
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
             <SpeedIcon sx={{ color: 'primary.main', mr: 1, fontSize: '2rem' }} />
             <Typography

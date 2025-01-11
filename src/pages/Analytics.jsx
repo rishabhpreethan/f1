@@ -6,7 +6,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer
 } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -202,7 +201,7 @@ function Analytics() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis 
                           dataKey="round" 
-                          label={{ value: 'Race', position: 'insideBottom', offset: -5 }}
+                          label={{ position: 'insideBottom', offset: -5 }}
                         />
                         <YAxis 
                           label={{ value: 'Points', angle: -90, position: 'insideLeft' }}
@@ -214,11 +213,10 @@ function Analytics() {
                           }}
                           labelFormatter={(label, items) => items[0]?.payload?.raceName || `Race ${label}`}
                         />
-                        <Legend />
                         <Line
                           type="monotone"
                           dataKey="points"
-                          stroke="#666666"
+                          stroke="#e00400"
                           strokeWidth={1}
                           name="Race Points"
                           dot={true}
@@ -226,7 +224,7 @@ function Analytics() {
                         <Line
                           type="monotone"
                           dataKey="cumulativePoints"
-                          stroke="#000000"
+                          stroke="#e00400"
                           strokeWidth={2}
                           name="Total Points"
                           dot={true}
@@ -250,7 +248,7 @@ function Analytics() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis 
                           dataKey="round" 
-                          label={{ value: 'Race', position: 'insideBottom', offset: -5 }}
+                          label={{ position: 'insideBottom', offset: -5 }}
                         />
                         <YAxis 
                           reversed 
@@ -261,11 +259,10 @@ function Analytics() {
                           formatter={(value, name) => [value, name]}
                           labelFormatter={(label, items) => items[0]?.payload?.raceName || `Race ${label}`}
                         />
-                        <Legend />
                         <Line
                           type="monotone"
                           dataKey="position"
-                          stroke="#000000"
+                          stroke="#e00400"
                           strokeWidth={2}
                           name="Position"
                           dot={true}

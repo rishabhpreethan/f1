@@ -1,12 +1,51 @@
 import axios from 'axios';
 import fs from 'fs/promises';
 import path from 'path';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const ERGAST_BASE_URL = 'https://ergast.com/api/f1';
 const YEAR = 2024;
+const DB_PATH = path.join(__dirname, 'sqlite.db');
 
 // Helper function to add delay between API calls
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// Initialize database
+async function initializeDatabase() {
+    // Ensure the database file exists
+    try {
+        await fs.access(DB_PATH);
+    } catch {
+        console.log('Creating new database file...');
+        await fs.writeFile(DB_PATH, '');
+    }
+
+    const db = await open({
+        filename: DB_PATH,
+        driver: sqlite3.Database
+    });
+
+    // Create sprint_results table if it doesn't exist
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS sprint_results (
+            sprint_result_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            race_id INTEGER,
+            driver_id TEXT,
+            position INTEGER,
+            points INTEGER,
+            FOREIGN KEY (race_id) REFERENCES races(race_id),
+            FOREIGN KEY (driver_id) REFERENCES drivers(driver_id)
+        )
+    `);
+
+    return db;
+}
 
 async function fetchWithRetry(url, retries = 3) {
     for (let i = 0; i < retries; i++) {
@@ -170,9 +209,40 @@ function calculateWeekendRating(raceResult, qualifyingResult) {
     return 8.5;
 }
 
+async function saveSprints(db, round, sprintResults) {
+    if (!sprintResults) return;
+
+    const race = await db.get('SELECT race_id FROM races WHERE round = ?', [round]);
+    if (!race) return;
+
+    // Delete existing sprint results for this race
+    await db.run('DELETE FROM sprint_results WHERE race_id = ?', [race.race_id]);
+
+    // Insert new sprint results
+    const stmt = await db.prepare(`
+        INSERT INTO sprint_results (race_id, driver_id, position, points)
+        VALUES (?, ?, ?, ?)
+    `);
+
+    for (const result of sprintResults.SprintResults || []) {
+        await stmt.run([
+            race.race_id,
+            result.Driver.driverId,
+            parseInt(result.position),
+            parseFloat(result.points)
+        ]);
+    }
+
+    await stmt.finalize();
+    console.log(`✓ Sprint results saved for round ${round}`);
+}
+
 async function generateRaceAnalytics(round) {
     console.log(`\n=== Processing Round ${round} ===`);
+    let db;
     try {
+        db = await initializeDatabase();
+
         // Fetch all race data
         const [
             raceResults, 
@@ -194,7 +264,12 @@ async function generateRaceAnalytics(round) {
             fetchCircuitDetails(round)
         ]);
 
-        console.log(`\nStructuring data for ${raceResults.raceName}...`);
+        // Save sprint results if available
+        if (sprintResults) {
+            await saveSprints(db, round, sprintResults);
+        }
+
+        console.log(`\nStructuring data for ${raceResults?.raceName || `Round ${round}`}...`);
 
         // Validate fetched data
         if (!raceResults || !raceResults.Results || raceResults.Results.length === 0) {
@@ -346,7 +421,7 @@ async function generate2024Data() {
 
         // Write to file
         console.log('\nWriting data to file...');
-        const filePath = path.join(process.cwd(), 'data', '2024_data.json');
+        const filePath = path.join(__dirname, 'data', '2024_data.json');
         await fs.writeFile(filePath, JSON.stringify(data, null, 2));
         console.log('\n✓ Data successfully written to 2024_data.json');
         console.log('\n=== Data Generation Complete ===');

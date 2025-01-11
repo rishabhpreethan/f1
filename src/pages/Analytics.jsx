@@ -1,243 +1,284 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
+  CartesianGrid,
   Tooltip,
   Legend,
+  ResponsiveContainer
 } from "recharts";
-import { TrendingUp, Trophy, Flag, Users, CalendarDays } from "lucide-react";
-
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
-// Sample data - will be replaced with real F1 data
-const pointsProgressionData = [
-  { race: "Bahrain", verstappen: 25, perez: 18, hamilton: 15 },
-  { race: "Saudi Arabia", verstappen: 50, perez: 36, hamilton: 28 },
-  { race: "Australia", verstappen: 69, perez: 54, hamilton: 43 },
-  { race: "Azerbaijan", verstappen: 93, perez: 72, hamilton: 48 },
-  { race: "Miami", verstappen: 119, perez: 87, hamilton: 56 },
-];
-
-const constructorData = [
-  { name: "Red Bull Racing", points: 287 },
-  { name: "Mercedes", points: 152 },
-  { name: "Ferrari", points: 148 },
-  { name: "McLaren", points: 120 },
-  { name: "Aston Martin", points: 97 },
-];
-
-const chartConfig = {
-  verstappen: {
-    label: "Verstappen",
-    color: "hsl(var(--primary))",
-  },
-  perez: {
-    label: "Perez",
-    color: "hsl(var(--secondary))",
-  },
-  hamilton: {
-    label: "Hamilton",
-    color: "hsl(var(--accent))",
-  },
-};
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { Trophy, Flag, Timer, TrendingUp } from "lucide-react";
 
 function Analytics() {
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [drivers, setDrivers] = useState([]);
+  const [driverStats, setDriverStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch drivers for dropdown
+  useEffect(() => {
+    fetch('http://localhost:3001/api/drivers')
+      .then(res => res.json())
+      .then(data => {
+        setDrivers(data);
+        if (data.length > 0) {
+          setSelectedDriver(data[0].driverId);
+        }
+      })
+      .catch(error => console.error('Error fetching drivers:', error));
+  }, []);
+
+  // Fetch driver stats when selection changes
+  useEffect(() => {
+    if (selectedDriver) {
+      setLoading(true);
+      fetch(`http://localhost:3001/api/driver-stats/${selectedDriver}`)
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          return res.json();
+        })
+        .then(data => {
+          console.log('Received data:', data);
+          if (!data.pointsProgression || !data.racePositions) {
+            throw new Error('Invalid data format received');
+          }
+          // Process the data to ensure numbers and calculate cumulative points
+          const processedData = {
+            pointsProgression: data.pointsProgression.map((item, index, arr) => {
+              // Calculate cumulative points
+              const cumulativePoints = arr
+                .slice(0, index + 1)
+                .reduce((sum, race) => sum + Number(race.points || 0), 0);
+              
+              return {
+                round: Number(item.round),
+                points: Number(item.points || 0),
+                cumulativePoints,
+                raceName: item.raceName
+              };
+            }),
+            racePositions: data.racePositions.map(item => ({
+              round: Number(item.round),
+              position: Number(item.position || 20),
+              raceName: item.raceName
+            }))
+          };
+          setDriverStats(processedData);
+          setLoading(false);
+        })
+        .catch(error => {
+          console.error('Error fetching driver stats:', error);
+          setLoading(false);
+          setDriverStats({
+            pointsProgression: [],
+            racePositions: []
+          });
+        });
+    }
+  }, [selectedDriver]);
+
+  const selectedDriverName = drivers.find(d => d.driverId === selectedDriver)?.name;
+
+  // Calculate overview stats
+  const totalPoints = driverStats?.pointsProgression.reduce((sum, item) => sum + item.points, 0) || 0;
+  const bestPosition = driverStats?.racePositions.reduce((best, item) => 
+    item.position > 0 ? Math.min(best, item.position) : best, 20) || '-';
+  const racesCompleted = driverStats?.racePositions.filter(item => item.position > 0).length || 0;
+  const averagePosition = driverStats?.racePositions
+    .filter(item => item.position > 0)
+    .reduce((sum, item, _, arr) => sum + item.position / arr.length, 0)
+    .toFixed(1) || '-';
+
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">F1 Analytics Dashboard</h2>
-      </div>
-      
-      {/* Overview Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Races</CardTitle>
-            <Trophy className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">1000+</div>
-            <p className="text-xs text-muted-foreground">
-              Since 1950
+    <div className="flex flex-col min-h-screen w-screen bg-background">
+      <div className="flex-1 w-full p-4 md:p-8 pt-6">
+        <div className="flex items-center justify-between mb-8 w-full max-w-[2000px] mx-auto">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Driver Analytics</h2>
+            <p className="text-muted-foreground">
+              Detailed performance analysis for Formula 1 drivers
             </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Drivers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">20</div>
-            <p className="text-xs text-muted-foreground">
-              2024 Season
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Circuits</CardTitle>
-            <Flag className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">23</div>
-            <p className="text-xs text-muted-foreground">
-              Across the globe
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Season</CardTitle>
-            <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">2024</div>
-            <p className="text-xs text-muted-foreground">
-              March - December
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Points Progression</CardTitle>
-            <CardDescription>
-              Top drivers' championship points progression
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <AreaChart
-                data={pointsProgressionData}
-                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                width={800}
-                height={300}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="race" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Area
-                  type="monotone"
-                  dataKey="verstappen"
-                  stackId="1"
-                  stroke="#FF1E1E"
-                  fill="#FF1E1E"
-                  fillOpacity={0.3}
-                  name="Verstappen"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="perez"
-                  stackId="2"
-                  stroke="#3671C6"
-                  fill="#3671C6"
-                  fillOpacity={0.3}
-                  name="Perez"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="hamilton"
-                  stackId="3"
-                  stroke="#27F4D2"
-                  fill="#27F4D2"
-                  fillOpacity={0.3}
-                  name="Hamilton"
-                />
-              </AreaChart>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Constructor Standings</CardTitle>
-            <CardDescription>
-              Current constructor championship standings
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <BarChart
-                data={constructorData}
-                layout="vertical"
-                margin={{ top: 5, right: 30, left: 50, bottom: 5 }}
-                width={400}
-                height={300}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis dataKey="name" type="category" />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="points" fill="#8884d8" name="Points" />
-              </BarChart>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Results Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Race Results</CardTitle>
-          <CardDescription>Latest Grand Prix results</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="relative w-full overflow-auto">
-            <table className="w-full caption-bottom text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="h-12 px-4 text-left align-middle font-medium">Position</th>
-                  <th className="h-12 px-4 text-left align-middle font-medium">Driver</th>
-                  <th className="h-12 px-4 text-left align-middle font-medium">Team</th>
-                  <th className="h-12 px-4 text-left align-middle font-medium">Points</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b">
-                  <td className="p-4 align-middle">1</td>
-                  <td className="p-4 align-middle">Max Verstappen</td>
-                  <td className="p-4 align-middle">Red Bull Racing</td>
-                  <td className="p-4 align-middle">25</td>
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4 align-middle">2</td>
-                  <td className="p-4 align-middle">Lewis Hamilton</td>
-                  <td className="p-4 align-middle">Mercedes</td>
-                  <td className="p-4 align-middle">18</td>
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4 align-middle">3</td>
-                  <td className="p-4 align-middle">Charles Leclerc</td>
-                  <td className="p-4 align-middle">Ferrari</td>
-                  <td className="p-4 align-middle">15</td>
-                </tr>
-              </tbody>
-            </table>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex items-center space-x-2">
+            <Select value={selectedDriver} onValueChange={setSelectedDriver}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select Driver">
+                  {selectedDriverName}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {drivers.map(driver => (
+                  <SelectItem key={driver.driverId} value={driver.driverId}>
+                    {driver.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center items-center h-[400px]">
+            <p>Loading driver statistics...</p>
+          </div>
+        ) : (
+          <>
+            {/* Overview Cards */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8 w-full max-w-[2000px] mx-auto">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Points</CardTitle>
+                  <Trophy className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{totalPoints}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Championship points
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Best Position</CardTitle>
+                  <Flag className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{bestPosition}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Season's best finish
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Races Completed</CardTitle>
+                  <Timer className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{racesCompleted}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Out of {driverStats.racePositions.length} races
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Average Position</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{averagePosition}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Average race finish
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Charts */}
+            <div className="grid gap-4 md:grid-cols-2 h-[calc(100vh-400px)] w-full max-w-[2000px] mx-auto">
+              {/* Points Progression Chart */}
+              <Card className="col-span-1">
+                <CardHeader>
+                  <CardTitle>Points Progression</CardTitle>
+                  <CardDescription>Championship points throughout the season</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[calc(100vh-550px)]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={driverStats.pointsProgression}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis 
+                          dataKey="round" 
+                          label={{ value: 'Race', position: 'insideBottom', offset: -5 }}
+                        />
+                        <YAxis 
+                          label={{ value: 'Points', angle: -90, position: 'insideLeft' }}
+                        />
+                        <Tooltip 
+                          formatter={(value, name) => {
+                            if (name === "Race Points") return [value, name];
+                            return [value, "Total Points"];
+                          }}
+                          labelFormatter={(label, items) => items[0]?.payload?.raceName || `Race ${label}`}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="points"
+                          stroke="#666666"
+                          strokeWidth={1}
+                          name="Race Points"
+                          dot={true}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="cumulativePoints"
+                          stroke="#000000"
+                          strokeWidth={2}
+                          name="Total Points"
+                          dot={true}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Race Positions Chart */}
+              <Card className="col-span-1">
+                <CardHeader>
+                  <CardTitle>Race Positions</CardTitle>
+                  <CardDescription>Finishing positions for each race</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[calc(100vh-550px)]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={driverStats.racePositions}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis 
+                          dataKey="round" 
+                          label={{ value: 'Race', position: 'insideBottom', offset: -5 }}
+                        />
+                        <YAxis 
+                          reversed 
+                          domain={[1, 20]}
+                          label={{ value: 'Position', angle: -90, position: 'insideLeft' }}
+                        />
+                        <Tooltip 
+                          formatter={(value, name) => [value, name]}
+                          labelFormatter={(label, items) => items[0]?.payload?.raceName || `Race ${label}`}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="position"
+                          stroke="#000000"
+                          strokeWidth={2}
+                          name="Position"
+                          dot={true}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

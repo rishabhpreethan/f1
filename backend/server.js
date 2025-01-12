@@ -120,7 +120,10 @@ app.get('/api/driver-stats/:driverId', async (req, res) => {
       SELECT 
         r.round,
         r.name as raceName,
-        COALESCE(rr.points, 0) + COALESCE(sr.points, 0) as points
+        COALESCE(rr.points, 0) as race_points,
+        COALESCE(sr.points, 0) as sprint_points,
+        COALESCE(rr.points, 0) + COALESCE(sr.points, 0) as points,
+        COALESCE(rr.position, 0) as position
       FROM races r
       LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
       LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.driver_id = ?
@@ -137,6 +140,30 @@ app.get('/api/driver-stats/:driverId', async (req, res) => {
       FROM races r
       LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
       GROUP BY r.round
+      ORDER BY r.round
+    `;
+
+    // Get season stats
+    const statsQuery = `
+      SELECT 
+        COUNT(CASE WHEN rr.position = 1 THEN 1 END) as wins,
+        COUNT(CASE WHEN rr.position <= 3 THEN 1 END) as podiums,
+        COUNT(CASE WHEN rr.position = 0 THEN 1 END) as dnfs
+      FROM races r
+      LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
+    `;
+
+    // Get qualifying vs race positions
+    const qualifyingVsRaceQuery = `
+      SELECT 
+        r.round,
+        r.name as raceName,
+        COALESCE(q.position, 20) as qualifying_position,
+        COALESCE(rr.position, 20) as race_position,
+        COALESCE(rr.position, 20) - COALESCE(q.position, 20) as positions_gained
+      FROM races r
+      LEFT JOIN qualifying_results q ON r.race_id = q.race_id AND q.driver_id = ?
+      LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
       ORDER BY r.round
     `;
 
@@ -159,18 +186,33 @@ app.get('/api/driver-stats/:driverId', async (req, res) => {
       });
     };
 
-    // Execute both queries and wait for results
-    Promise.all([getPoints(), getPositions()])
-      .then(([pointsData, positionsData]) => {
-        console.log('Points data:', pointsData);
-        console.log('Positions data:', positionsData);
+    const getStats = () => {
+      return new Promise((resolve, reject) => {
+        db.get(statsQuery, [driverId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+    };
 
-        const response = {
-          pointsProgression: pointsData || [],
-          racePositions: positionsData || []
-        };
-        
-        res.json(response);
+    const getQualifyingVsRace = () => {
+      return new Promise((resolve, reject) => {
+        db.all(qualifyingVsRaceQuery, [driverId, driverId], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      });
+    };
+
+    // Execute all queries and wait for results
+    Promise.all([getPoints(), getPositions(), getStats(), getQualifyingVsRace()])
+      .then(([pointsData, positionsData, statsData, qualifyingVsRaceData]) => {
+        res.json({
+          pointsProgression: pointsData,
+          racePositions: positionsData,
+          stats: statsData,
+          qualifyingVsRace: qualifyingVsRaceData
+        });
       })
       .catch(error => {
         console.error('Database query error:', error);

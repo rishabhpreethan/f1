@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box } from '@mui/material';
@@ -21,11 +21,12 @@ function AppContent() {
         {!isLoginPage && <Navbar />}
         <Box component="main" sx={{ width: '100%' }}>
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/home" element={<Home />} />
             <Route path="/blog" element={<Blog />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/analytics" element={<Analytics />} />
-            <Route path="/login" element={<Login />} />
           </Routes>
         </Box>
       </Box>

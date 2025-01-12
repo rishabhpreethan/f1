@@ -52,7 +52,7 @@ export default function Login() {
 
       if (result.success) {
         localStorage.setItem('token', result.token);
-        navigate('/');
+        navigate('/home');
       } else {
         setError(result.error || 'An error occurred');
       }

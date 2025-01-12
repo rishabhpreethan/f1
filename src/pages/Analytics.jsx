@@ -10,7 +10,8 @@ import {
   BarChart,
   Bar,
   LabelList,
-  Cell
+  Cell,
+  ReferenceLine
 } from "recharts";
 import {
   Select,
@@ -242,9 +243,9 @@ function Analytics() {
     .toFixed(1) || '-';
 
   return (
-    <div className="flex flex-col min-h-screen w-screen bg-background">
-      <div className="flex-1 w-full p-4 md:p-8 pt-6">
-        <div className="flex items-center justify-between mb-8 w-full max-w-[2000px] mx-auto">
+    <div className="flex flex-col min-h-screen w-full bg-white">
+      <div className="flex-1 space-y-8 p-8 pt-6 bg-white">
+        <div className="flex items-center justify-between space-y-2">
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Driver Analytics</h2>
             <p className="text-muted-foreground">
@@ -270,14 +271,14 @@ function Analytics() {
         </div>
 
         {loading ? (
-          <div className="flex justify-center items-center h-[400px]">
-            <p>Loading driver statistics...</p>
+          <div className="flex items-center justify-center h-[calc(100vh-200px)] bg-white">
+            <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900"></div>
           </div>
         ) : (
-          <>
+          <div className="space-y-8 bg-white">
             {/* Overview Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8 w-full max-w-[2000px] mx-auto">
-              <Card>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 bg-white">
+              <Card className="bg-white">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Points</CardTitle>
                   <Trophy className="h-4 w-4 text-muted-foreground" />
@@ -289,37 +290,37 @@ function Analytics() {
                   </p>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="bg-white">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Best Position</CardTitle>
                   <Flag className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{bestPosition}</div>
+                  <div className="text-2xl font-bold">P{bestPosition}</div>
                   <p className="text-xs text-muted-foreground">
                     Season's best finish
                   </p>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="bg-white">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Race Wins</CardTitle>
                   <Trophy className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{driverStats.stats?.wins || 0}</div>
+                  <div className="text-2xl font-bold">{driverStats?.stats?.wins || 0}</div>
                   <p className="text-xs text-muted-foreground">
                     Race victories
                   </p>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="bg-white">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Podium Finishes</CardTitle>
                   <Trophy className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{driverStats.stats?.podiums || 0}</div>
+                  <div className="text-2xl font-bold">{driverStats?.stats?.podiums || 0}</div>
                   <p className="text-xs text-muted-foreground">
                     Top 3 finishes
                   </p>
@@ -328,9 +329,9 @@ function Analytics() {
             </div>
 
             {/* Charts */}
-            <div className="grid gap-4 md:grid-cols-2 h-[calc(100vh-400px)] w-full max-w-[2000px] mx-auto">
+            <div className="grid gap-4 md:grid-cols-2 bg-white">
               {/* Points Progression Chart */}
-              <Card className="col-span-1">
+              <Card className="col-span-1 bg-white">
                 <CardHeader>
                   <CardTitle>Points Progression</CardTitle>
                   <CardDescription>Championship points throughout the season</CardDescription>
@@ -405,7 +406,7 @@ function Analytics() {
               </Card>
 
               {/* Positions Gained/Lost Chart */}
-              <Card className="col-span-1">
+              <Card className="col-span-1 bg-white">
                 <CardHeader>
                   <CardTitle>Positions Gained/Lost</CardTitle>
                   <CardDescription>Positions gained or lost from qualifying to race</CardDescription>
@@ -423,17 +424,18 @@ function Analytics() {
                         }}
                       >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis 
+                        <XAxis
                           dataKey="round"
                           tickLine={false}
                           axisLine={false}
                         />
-                        <YAxis 
+                        <YAxis
                           domain={[20, -20]}
                           label={{ value: 'Positions Gained/Lost', angle: -90, position: 'insideLeft' }}
                           reversed
                         />
-                        <Tooltip 
+                        <ReferenceLine y={0} stroke="#666" strokeDasharray="3 3" />
+                        <Tooltip
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
                               const data = payload[0].payload;
@@ -465,8 +467,8 @@ function Analytics() {
                           wrapperStyle={{ outline: 'none' }}
                           contentStyle={{ backgroundColor: 'transparent', border: 'none' }}
                         />
-                        <Bar 
-                          dataKey="positions_gained" 
+                        <Bar
+                          dataKey="positions_gained"
                           radius={8}
                         >
                           <LabelList
@@ -491,7 +493,7 @@ function Analytics() {
               </Card>
 
               {/* Teammate Comparison Chart */}
-              <Card className="col-span-1">
+              <Card className="col-span-1 bg-white">
                 <CardHeader>
                   <CardTitle>Teammate Comparison</CardTitle>
                   <CardDescription>Race positions compared to teammate throughout the season</CardDescription>
@@ -533,8 +535,8 @@ function Analytics() {
                                     {driverStats.teammateComparison.drivers.map((code, index) => (
                                       data[code] && (
                                         <div key={code} className="flex items-center gap-2">
-                                          <div 
-                                            className="h-2.5 w-2.5 rounded-[2px]" 
+                                          <div
+                                            className="h-2.5 w-2.5 rounded-[2px]"
                                             style={{ backgroundColor: index === 0 ? '#e00400' : index === 1 ? '#9333ea' : '#22c55e' }}
                                           />
                                           <span className="text-xs">{code}</span>
@@ -572,7 +574,7 @@ function Analytics() {
               </Card>
 
               {/* Race Positions Chart */}
-              <Card className="col-span-1">
+              <Card className="col-span-1 bg-white">
                 <CardHeader>
                   <CardTitle>Race Positions</CardTitle>
                   <CardDescription>Finishing positions for each race</CardDescription>
@@ -582,16 +584,16 @@ function Analytics() {
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={driverStats.racePositions}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          dataKey="round" 
+                        <XAxis
+                          dataKey="round"
                           label={{ position: 'insideBottom', offset: -5 }}
                         />
-                        <YAxis 
-                          reversed 
+                        <YAxis
+                          reversed
                           domain={[1, 20]}
                           label={{ value: 'Position', angle: -90, position: 'insideLeft' }}
                         />
-                        <Tooltip 
+                        <Tooltip
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
                               const data = payload[0].payload;
@@ -625,7 +627,7 @@ function Analytics() {
                 </CardContent>
               </Card>
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>

@@ -167,6 +167,28 @@ app.get('/api/driver-stats/:driverId', async (req, res) => {
       ORDER BY r.round
     `;
 
+    // Get teammate comparison data
+    const teammateComparisonQuery = `
+      WITH SelectedDriverConstructor AS (
+        -- Get the constructor for the selected driver
+        SELECT DISTINCT rr.constructor_id
+        FROM race_results rr
+        WHERE rr.driver_id = ?
+        ORDER BY rr.race_id DESC
+        LIMIT 1
+      )
+      SELECT 
+        r.round,
+        r.name as raceName,
+        d.code as driver_code,
+        rr.position
+      FROM races r
+      JOIN race_results rr ON r.race_id = rr.race_id
+      JOIN SelectedDriverConstructor sdc ON rr.constructor_id = sdc.constructor_id
+      JOIN drivers d ON rr.driver_id = d.driver_id
+      ORDER BY r.round, rr.position
+    `;
+    
     // Using promises to handle database queries
     const getPoints = () => {
       return new Promise((resolve, reject) => {
@@ -204,14 +226,24 @@ app.get('/api/driver-stats/:driverId', async (req, res) => {
       });
     };
 
+    const getTeammateComparison = () => {
+      return new Promise((resolve, reject) => {
+        db.all(teammateComparisonQuery, [driverId], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      });
+    };
+
     // Execute all queries and wait for results
-    Promise.all([getPoints(), getPositions(), getStats(), getQualifyingVsRace()])
-      .then(([pointsData, positionsData, statsData, qualifyingVsRaceData]) => {
+    Promise.all([getPoints(), getPositions(), getStats(), getQualifyingVsRace(), getTeammateComparison()])
+      .then(([pointsData, positionsData, statsData, qualifyingVsRaceData, teammateComparisonData]) => {
         res.json({
           pointsProgression: pointsData,
           racePositions: positionsData,
           stats: statsData,
-          qualifyingVsRace: qualifyingVsRaceData
+          qualifyingVsRace: qualifyingVsRaceData,
+          teammateComparison: teammateComparisonData
         });
       })
       .catch(error => {

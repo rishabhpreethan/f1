@@ -184,7 +184,36 @@ function Analytics() {
               raceName: item.raceName,
               performance: item.performance,
               positions_gained: Number(item.race_position) - Number(item.qualifying_position)
-            }))
+            })),
+            teammateComparison: (() => {
+              // Group by round
+              const byRound = data.teammateComparison.reduce((acc, item) => {
+                acc[item.round] = acc[item.round] || {
+                  round: Number(item.round),
+                  raceName: item.raceName
+                };
+                acc[item.round][item.driver_code] = Number(item.position);
+                return acc;
+              }, {});
+
+              // Get unique driver codes, ensuring selected driver is first
+              const driverCodes = [...new Set(data.teammateComparison.map(item => item.driver_code))];
+              const selectedDriverCode = data.teammateComparison.find(item => item.driver_id === selectedDriver)?.driver_code;
+              
+              // Sort drivers so selected driver is first
+              const sortedDriverCodes = [
+                selectedDriverCode,
+                ...driverCodes.filter(code => code !== selectedDriverCode)
+              ].filter(Boolean); // Remove any undefined values
+
+              // Take only first 2-3 drivers (depending on team)
+              const finalDriverCodes = sortedDriverCodes.slice(0, 3);
+
+              return {
+                data: Object.values(byRound),
+                drivers: finalDriverCodes
+              };
+            })()
           };
           setDriverStats(processedData);
           setLoading(false);
@@ -456,6 +485,87 @@ function Analytics() {
                           ))}
                         </Bar>
                       </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Teammate Comparison Chart */}
+              <Card className="col-span-1">
+                <CardHeader>
+                  <CardTitle>Teammate Comparison</CardTitle>
+                  <CardDescription>Race positions compared to teammate throughout the season</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[calc(100vh-550px)]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={driverStats.teammateComparison.data}
+                        margin={{
+                          top: 20,
+                          right: 20,
+                          bottom: 20,
+                          left: 20,
+                        }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="round"
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          reversed
+                          domain={[1, 20]}
+                          ticks={[1, 5, 10, 15, 20]}
+                          tickLine={false}
+                          axisLine={false}
+                          label={{ value: 'Position', angle: -90, position: 'insideLeft' }}
+                        />
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
+                                  <p className="text-sm font-medium mb-2">{data.raceName}</p>
+                                  <div className="space-y-1">
+                                    {driverStats.teammateComparison.drivers.map((code, index) => (
+                                      data[code] && (
+                                        <div key={code} className="flex items-center gap-2">
+                                          <div 
+                                            className="h-2.5 w-2.5 rounded-[2px]" 
+                                            style={{ backgroundColor: index === 0 ? '#e00400' : index === 1 ? '#9333ea' : '#22c55e' }}
+                                          />
+                                          <span className="text-xs">{code}</span>
+                                          <span className="ml-auto text-xs font-mono">P{data[code]}</span>
+                                        </div>
+                                      )
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                          wrapperStyle={{ outline: 'none' }}
+                          contentStyle={{ backgroundColor: 'transparent', border: 'none' }}
+                        />
+                        {driverStats.teammateComparison.drivers.map((code, index) => (
+                          <Line
+                            key={code}
+                            type="monotone"
+                            dataKey={code}
+                            stroke={index === 0 ? '#e00400' : index === 1 ? '#9333ea' : '#22c55e'}
+                            strokeWidth={2}
+                            dot={{
+                              r: 4,
+                              strokeWidth: 2,
+                              fill: "white"
+                            }}
+                          />
+                        ))}
+                      </LineChart>
                     </ResponsiveContainer>
                   </div>
                 </CardContent>

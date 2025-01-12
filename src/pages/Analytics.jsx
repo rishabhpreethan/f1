@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Trophy, Flag, Timer, TrendingUp } from "lucide-react";
+import { Trophy, Flag, Timer, TrendingUp, Medal } from "lucide-react";
 
 const CustomDot = (props) => {
   const { cx, cy, payload } = props;
@@ -176,7 +176,8 @@ function Analytics() {
             stats: {
               wins: data.stats?.wins || 0,
               podiums: data.stats?.podiums || 0,
-              dnf: data.stats?.dnf || 0
+              dnf: data.stats?.dnf || 0,
+              championship_position: data.stats?.championship_position || '-'
             },
             qualifyingVsRace: data.qualifyingVsRace.map(item => ({
               round: Number(item.round),
@@ -277,7 +278,7 @@ function Analytics() {
         ) : (
           <div className="space-y-8 bg-white">
             {/* Overview Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 bg-white">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 bg-white">
               <Card className="bg-white">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Points</CardTitle>
@@ -323,6 +324,18 @@ function Analytics() {
                   <div className="text-2xl font-bold">{driverStats?.stats?.podiums || 0}</div>
                   <p className="text-xs text-muted-foreground">
                     Top 3 finishes
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="bg-white">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Championship Position</CardTitle>
+                  <Medal className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">P{driverStats?.stats?.championship_position || '-'}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Current standing
                   </p>
                 </CardContent>
               </Card>

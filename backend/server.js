@@ -145,12 +145,34 @@ app.get('/api/driver-stats/:driverId', async (req, res) => {
 
     // Get season stats
     const statsQuery = `
+      WITH LatestRace AS (
+        SELECT MAX(r.race_id) as race_id
+        FROM races r
+      ),
+      DriverPoints AS (
+        SELECT 
+          d.driver_id,
+          SUM(rr.points) as total_points
+        FROM race_results rr
+        JOIN drivers d ON rr.driver_id = d.driver_id
+        GROUP BY d.driver_id
+      ),
+      DriverStandings AS (
+        SELECT 
+          driver_id,
+          total_points,
+          RANK() OVER (ORDER BY total_points DESC) as championship_position
+        FROM DriverPoints
+      )
       SELECT 
         COUNT(CASE WHEN rr.position = 1 THEN 1 END) as wins,
         COUNT(CASE WHEN rr.position <= 3 THEN 1 END) as podiums,
-        COUNT(CASE WHEN rr.position = 0 THEN 1 END) as dnfs
-      FROM races r
-      LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
+        COUNT(CASE WHEN rr.status = 'DNF' THEN 1 END) as dnf,
+        ds.championship_position
+      FROM race_results rr
+      JOIN DriverStandings ds ON rr.driver_id = ds.driver_id
+      WHERE rr.driver_id = ?
+      GROUP BY rr.driver_id;
     `;
 
     // Get qualifying vs race positions

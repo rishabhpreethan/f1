@@ -319,17 +319,39 @@ function Analytics() {
                           label={{ value: 'Points', angle: -90, position: 'insideLeft' }}
                         />
                         <Tooltip 
-                          formatter={(value, name, entry) => {
-                            if (name === "Race Points") {
-                              const item = entry.payload;
-                              return [
-                                `Race: ${item.race_points} | Sprint: ${item.sprint_points}`,
-                                "Points Breakdown"
-                              ];
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
+                                  <p className="text-sm font-medium mb-2">{data.raceName}</p>
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-2.5 w-2.5 rounded-[2px] bg-[#e00400]" />
+                                      <span className="text-xs">Race Points</span>
+                                      <span className="ml-auto text-xs font-mono">{data.race_points}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-2.5 w-2.5 rounded-[2px] bg-[#9333ea]" />
+                                      <span className="text-xs">Sprint Points</span>
+                                      <span className="ml-auto text-xs font-mono">{data.sprint_points}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-white/20">
+                                      <span className="text-xs font-medium">Race Total</span>
+                                      <span className="ml-auto text-xs font-mono">{data.points}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-medium">Season Total</span>
+                                      <span className="ml-auto text-xs font-mono">{data.cumulativePoints}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
                             }
-                            return [value, "Total Points"];
+                            return null;
                           }}
-                          labelFormatter={(label, items) => items[0]?.payload?.raceName || `Race ${label}`}
+                          wrapperStyle={{ outline: 'none' }}
+                          contentStyle={{ backgroundColor: 'transparent', border: 'none' }}
                         />
                         <Line
                           type="monotone"
@@ -387,18 +409,32 @@ function Analytics() {
                             if (active && payload && payload.length) {
                               const data = payload[0].payload;
                               const gained = data.positions_gained < 0;
-                              const text = gained ? 'gained' : 'lost';
                               return (
-                                <div className="bg-black/80 p-2 rounded-lg border border-white/20">
-                                  <p className="text-white">{data.raceName}</p>
-                                  <p className="text-white">Qualifying: P{data.qualifying_position}</p>
-                                  <p className="text-white">Race: P{data.race_position}</p>
-                                  <p className="text-white">{Math.abs(data.positions_gained)} position{Math.abs(data.positions_gained) !== 1 ? 's' : ''} {text}</p>
+                                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
+                                  <p className="text-sm font-medium mb-2">{data.raceName}</p>
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-2.5 w-2.5 rounded-[2px] bg-[#e00400]" />
+                                      <span className="text-xs">Qualifying</span>
+                                      <span className="ml-auto text-xs font-mono">P{data.qualifying_position}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-2.5 w-2.5 rounded-[2px] bg-[#22c55e]" />
+                                      <span className="text-xs">Race</span>
+                                      <span className="ml-auto text-xs font-mono">P{data.race_position}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-white/20">
+                                      <span className="text-xs font-medium">{gained ? 'Positions Gained' : 'Positions Lost'}</span>
+                                      <span className="ml-auto text-xs font-mono">{gained ? `+${Math.abs(data.positions_gained)}` : `-${data.positions_gained}`}</span>
+                                    </div>
+                                  </div>
                                 </div>
                               );
                             }
                             return null;
                           }}
+                          wrapperStyle={{ outline: 'none' }}
+                          contentStyle={{ backgroundColor: 'transparent', border: 'none' }}
                         />
                         <Bar 
                           dataKey="positions_gained" 
@@ -446,8 +482,24 @@ function Analytics() {
                           label={{ value: 'Position', angle: -90, position: 'insideLeft' }}
                         />
                         <Tooltip 
-                          formatter={(value, name) => [value, name]}
-                          labelFormatter={(label, items) => items[0]?.payload?.raceName || `Race ${label}`}
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
+                                  <p className="text-sm font-medium mb-2">{data.raceName}</p>
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-2.5 w-2.5 rounded-[2px] bg-[#e00400]" />
+                                    <span className="text-xs">Position</span>
+                                    <span className="ml-auto text-xs font-mono">P{data.position}</span>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                          wrapperStyle={{ outline: 'none' }}
+                          contentStyle={{ backgroundColor: 'transparent', border: 'none' }}
                         />
                         <Line
                           type="monotone"

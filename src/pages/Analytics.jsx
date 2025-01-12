@@ -452,7 +452,6 @@ function Analytics() {
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
                               const data = payload[0].payload;
-                              const gained = data.positions_gained < 0;
                               return (
                                 <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
                                   <p className="text-sm font-medium mb-2">{data.raceName}</p>
@@ -468,8 +467,8 @@ function Analytics() {
                                       <span className="ml-auto text-xs font-mono">P{data.race_position}</span>
                                     </div>
                                     <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-white/20">
-                                      <span className="text-xs font-medium">{gained ? 'Positions Gained' : 'Positions Lost'}</span>
-                                      <span className="ml-auto text-xs font-mono">{gained ? `+${Math.abs(data.positions_gained)}` : `-${data.positions_gained}`}</span>
+                                      <span className="text-xs font-medium">Positions Gained/Lost</span>
+                                      <span className="ml-auto text-xs font-mono">{data.positions_gained >= 0 ? `-${Math.abs(data.positions_gained)}` : `+${Math.abs(data.positions_gained)}`}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -500,6 +499,60 @@ function Analytics() {
                           ))}
                         </Bar>
                       </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Race Positions Chart */}
+              <Card className="col-span-1 bg-white">
+                <CardHeader>
+                  <CardTitle>Race Positions</CardTitle>
+                  <CardDescription>Finishing positions for each race</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[calc(100vh-550px)]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={driverStats.racePositions}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="round"
+                          label={{ position: 'insideBottom', offset: -5 }}
+                        />
+                        <YAxis
+                          reversed
+                          domain={[1, 20]}
+                          label={{ value: 'Position', angle: -90, position: 'insideLeft' }}
+                        />
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
+                                  <p className="text-sm font-medium mb-2">{data.raceName}</p>
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-2.5 w-2.5 rounded-[2px] bg-[#e00400]" />
+                                    <span className="text-xs">Position</span>
+                                    <span className="ml-auto text-xs font-mono">P{data.position}</span>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                          wrapperStyle={{ outline: 'none' }}
+                          contentStyle={{ backgroundColor: 'transparent', border: 'none' }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="position"
+                          stroke="#e00400"
+                          strokeWidth={2}
+                          name="Position"
+                          dot={(props) => <PositionDot {...props} chartHeight={props.chartHeight} />}
+                        />
+                      </LineChart>
                     </ResponsiveContainer>
                   </div>
                 </CardContent>
@@ -580,60 +633,6 @@ function Analytics() {
                             }}
                           />
                         ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Race Positions Chart */}
-              <Card className="col-span-1 bg-white">
-                <CardHeader>
-                  <CardTitle>Race Positions</CardTitle>
-                  <CardDescription>Finishing positions for each race</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[calc(100vh-550px)]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={driverStats.racePositions}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="round"
-                          label={{ position: 'insideBottom', offset: -5 }}
-                        />
-                        <YAxis
-                          reversed
-                          domain={[1, 20]}
-                          label={{ value: 'Position', angle: -90, position: 'insideLeft' }}
-                        />
-                        <Tooltip
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
-                                  <p className="text-sm font-medium mb-2">{data.raceName}</p>
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-2.5 w-2.5 rounded-[2px] bg-[#e00400]" />
-                                    <span className="text-xs">Position</span>
-                                    <span className="ml-auto text-xs font-mono">P{data.position}</span>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                          wrapperStyle={{ outline: 'none' }}
-                          contentStyle={{ backgroundColor: 'transparent', border: 'none' }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="position"
-                          stroke="#e00400"
-                          strokeWidth={2}
-                          name="Position"
-                          dot={(props) => <PositionDot {...props} chartHeight={props.chartHeight} />}
-                        />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>

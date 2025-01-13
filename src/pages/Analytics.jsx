@@ -121,6 +121,7 @@ function Analytics() {
   const [drivers, setDrivers] = useState([]);
   const [driverStats, setDriverStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [positionsRange, setPositionsRange] = useState({ min: -20, max: 20 });
 
   // Fetch drivers for dropdown
   useEffect(() => {
@@ -218,6 +219,20 @@ function Analytics() {
             })()
           };
           setDriverStats(processedData);
+
+          // Find min and max positions gained/lost
+          const positionsGainedData = data.qualifyingVsRace.map(item => 
+            Number(item.race_position) - Number(item.qualifying_position)
+          );
+          const maxGained = Math.max(...positionsGainedData);
+          const minGained = Math.min(...positionsGainedData);
+          
+          // Add 2 positions padding to the range and round to nearest 5
+          const maxPadded = Math.ceil((maxGained + 2) / 5) * 5;
+          const minPadded = Math.floor((minGained - 2) / 5) * 5;
+          
+          setPositionsRange({ min: minPadded, max: maxPadded });
+
           setLoading(false);
         })
         .catch(error => {
@@ -357,6 +372,8 @@ function Analytics() {
                         <XAxis 
                           dataKey="round" 
                           label={{ position: 'insideBottom', offset: -5 }}
+                          interval={3}
+                          tickFormatter={(value) => `R${value}`}
                         />
                         <YAxis 
                           label={{ value: 'Points', angle: -90, position: 'insideLeft' }}
@@ -374,17 +391,16 @@ function Analytics() {
                                       <span className="text-xs">Race Points</span>
                                       <span className="ml-auto text-xs font-mono">{data.race_points}</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      <div className="h-2.5 w-2.5 rounded-[2px] bg-[#9333ea]" />
-                                      <span className="text-xs">Sprint Points</span>
-                                      <span className="ml-auto text-xs font-mono">{data.sprint_points}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-white/20">
-                                      <span className="text-xs font-medium">Race Total</span>
-                                      <span className="ml-auto text-xs font-mono">{data.points}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs font-medium">Season Total</span>
+                                    {data.sprint_points > 0 && (
+                                      <div className="flex items-center gap-2">
+                                        <div className="h-2.5 w-2.5 rounded-[2px] bg-[#9333ea]" />
+                                        <span className="text-xs">Sprint Points</span>
+                                        <span className="ml-auto text-xs font-mono">{data.sprint_points}</span>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2 border-t border-white/10 mt-2 pt-2">
+                                      <div className="h-2.5 w-2.5 rounded-[2px] bg-[#22c55e]" />
+                                      <span className="text-xs">Total Points</span>
                                       <span className="ml-auto text-xs font-mono">{data.cumulativePoints}</span>
                                     </div>
                                   </div>
@@ -395,14 +411,6 @@ function Analytics() {
                           }}
                           wrapperStyle={{ outline: 'none' }}
                           contentStyle={{ backgroundColor: 'transparent', border: 'none' }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="points"
-                          stroke="#e00400"
-                          strokeWidth={1}
-                          name="Race Points"
-                          dot={true}
                         />
                         <Line
                           type="monotone"
@@ -441,18 +449,22 @@ function Analytics() {
                           dataKey="round"
                           tickLine={false}
                           axisLine={false}
+                          interval={3}
+                          tickFormatter={(value) => `R${value}`}
                         />
                         <YAxis
-                          domain={[20, -20]}
+                          domain={[positionsRange.min, positionsRange.max]}
                           label={{ value: 'Positions Gained/Lost', angle: -90, position: 'insideLeft' }}
-                          reversed
+                          ticks={Array.from(
+                            { length: Math.floor((positionsRange.max - positionsRange.min) / 5) + 1 },
+                            (_, i) => positionsRange.min + i * 5
+                          )}
                         />
                         <ReferenceLine y={0} stroke="#666" strokeDasharray="3 3" />
                         <Tooltip
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
                               const data = payload[0].payload;
-                              const gained = data.positions_gained < 0;
                               return (
                                 <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
                                   <p className="text-sm font-medium mb-2">{data.raceName}</p>
@@ -468,8 +480,8 @@ function Analytics() {
                                       <span className="ml-auto text-xs font-mono">P{data.race_position}</span>
                                     </div>
                                     <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-white/20">
-                                      <span className="text-xs font-medium">{gained ? 'Positions Gained' : 'Positions Lost'}</span>
-                                      <span className="ml-auto text-xs font-mono">{gained ? `+${Math.abs(data.positions_gained)}` : `-${data.positions_gained}`}</span>
+                                      <span className="text-xs font-medium">Positions Gained/Lost</span>
+                                      <span className="ml-auto text-xs font-mono">{data.positions_gained >= 0 ? `-${Math.abs(data.positions_gained)}` : `+${Math.abs(data.positions_gained)}`}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -495,11 +507,67 @@ function Analytics() {
                           {driverStats.qualifyingVsRace?.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
-                              fill={entry.positions_gained < 0 ? '#22c55e' : '#ef4444'}
+                              fill={entry.positions_gained < 0 ? '#ef4444' : '#22c55e'}
                             />
                           ))}
                         </Bar>
                       </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Race Positions Chart */}
+              <Card className="col-span-1 bg-white">
+                <CardHeader>
+                  <CardTitle>Race Positions</CardTitle>
+                  <CardDescription>Finishing positions for each race</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[calc(100vh-550px)]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={driverStats.racePositions}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="round"
+                          label={{ position: 'insideBottom', offset: -5 }}
+                          interval={3}
+                          tickFormatter={(value) => `R${value}`}
+                        />
+                        <YAxis
+                          reversed
+                          domain={[1, 20]}
+                          label={{ value: 'Position', angle: -90, position: 'insideLeft' }}
+                        />
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
+                                  <p className="text-sm font-medium mb-2">{data.raceName}</p>
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-2.5 w-2.5 rounded-[2px] bg-[#e00400]" />
+                                    <span className="text-xs">Position</span>
+                                    <span className="ml-auto text-xs font-mono">P{data.position}</span>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                          wrapperStyle={{ outline: 'none' }}
+                          contentStyle={{ backgroundColor: 'transparent', border: 'none' }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="position"
+                          stroke="#e00400"
+                          strokeWidth={2}
+                          name="Position"
+                          dot
+                        />
+                      </LineChart>
                     </ResponsiveContainer>
                   </div>
                 </CardContent>
@@ -528,6 +596,8 @@ function Analytics() {
                           dataKey="round"
                           tickLine={false}
                           axisLine={false}
+                          interval={3}
+                          tickFormatter={(value) => `R${value}`}
                         />
                         <YAxis
                           reversed
@@ -574,66 +644,12 @@ function Analytics() {
                             stroke={index === 0 ? '#e00400' : index === 1 ? '#9333ea' : '#22c55e'}
                             strokeWidth={2}
                             dot={{
-                              r: 4,
+                              r: 3,
                               strokeWidth: 2,
                               fill: "white"
                             }}
                           />
                         ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Race Positions Chart */}
-              <Card className="col-span-1 bg-white">
-                <CardHeader>
-                  <CardTitle>Race Positions</CardTitle>
-                  <CardDescription>Finishing positions for each race</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[calc(100vh-550px)]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={driverStats.racePositions}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="round"
-                          label={{ position: 'insideBottom', offset: -5 }}
-                        />
-                        <YAxis
-                          reversed
-                          domain={[1, 20]}
-                          label={{ value: 'Position', angle: -90, position: 'insideLeft' }}
-                        />
-                        <Tooltip
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
-                                  <p className="text-sm font-medium mb-2">{data.raceName}</p>
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-2.5 w-2.5 rounded-[2px] bg-[#e00400]" />
-                                    <span className="text-xs">Position</span>
-                                    <span className="ml-auto text-xs font-mono">P{data.position}</span>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                          wrapperStyle={{ outline: 'none' }}
-                          contentStyle={{ backgroundColor: 'transparent', border: 'none' }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="position"
-                          stroke="#e00400"
-                          strokeWidth={2}
-                          name="Position"
-                          dot={(props) => <PositionDot {...props} chartHeight={props.chartHeight} />}
-                        />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>

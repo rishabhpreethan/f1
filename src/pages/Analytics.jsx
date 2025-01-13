@@ -507,7 +507,7 @@ function Analytics() {
                           {driverStats.qualifyingVsRace?.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
-                              fill={entry.positions_gained < 0 ? '#22c55e' : '#ef4444'}
+                              fill={entry.positions_gained < 0 ? '#ef4444' : '#22c55e'}
                             />
                           ))}
                         </Bar>

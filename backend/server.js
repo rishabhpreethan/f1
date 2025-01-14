@@ -293,6 +293,48 @@ app.get('/api/driver-stats/:driverId', async (req, res) => {
   }
 });
 
+// Get driver profile data
+app.get('/api/driver-profile/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      SELECT 
+        d.*,
+        c.name as constructor_name,
+        c.nationality as constructor_nationality,
+        r.position as current_position,
+        r.points as current_points
+      FROM drivers d
+      LEFT JOIN (
+        SELECT rr.*
+        FROM race_results rr
+        JOIN races ra ON rr.race_id = ra.race_id
+        WHERE rr.driver_id = ?
+        ORDER BY ra.date DESC
+        LIMIT 1
+      ) r ON d.driver_id = r.driver_id
+      LEFT JOIN constructors c ON r.constructor_id = c.constructor_id
+      WHERE d.driver_id = ?
+    `;
+
+    db.get(query, [driverId, driverId], (err, row) => {
+      if (err) {
+        console.error('Error fetching driver profile:', err);
+        res.status(500).json({ error: 'Failed to fetch driver profile' });
+        return;
+      }
+      res.json(row);
+    });
+  } catch (error) {
+    console.error('Server error in /api/driver-profile:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
 // Get qualifying results for a driver
 app.get('/api/qualifying-results/:driverId', async (req, res) => {
   const { driverId } = req.params;

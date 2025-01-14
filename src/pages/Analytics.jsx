@@ -120,6 +120,7 @@ function Analytics() {
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [drivers, setDrivers] = useState([]);
   const [driverStats, setDriverStats] = useState(null);
+  const [driverProfile, setDriverProfile] = useState(null);
   const [qualifyingResults, setQualifyingResults] = useState([]);
   const [raceResults, setRaceResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
@@ -147,13 +148,15 @@ function Analytics() {
       Promise.all([
         fetch(`http://localhost:3001/api/driver-stats/${selectedDriver}`),
         fetch(`http://localhost:3001/api/qualifying-results/${selectedDriver}`),
-        fetch(`http://localhost:3001/api/race-results/${selectedDriver}`)
+        fetch(`http://localhost:3001/api/race-results/${selectedDriver}`),
+        fetch(`http://localhost:3001/api/driver-profile/${selectedDriver}`)
       ])
-        .then(async ([statsRes, qualifyingRes, raceRes]) => {
-          const [statsData, qualifyingData, raceData] = await Promise.all([
+        .then(async ([statsRes, qualifyingRes, raceRes, profileRes]) => {
+          const [statsData, qualifyingData, raceData, profileData] = await Promise.all([
             statsRes.json(),
             qualifyingRes.json(),
-            raceRes.json()
+            raceRes.json(),
+            profileRes.json()
           ]);
 
           // Process stats data
@@ -244,6 +247,7 @@ function Analytics() {
 
           setQualifyingResults(qualifyingData);
           setRaceResults(raceData);
+          setDriverProfile(profileData);
 
           setLoading(false);
         })
@@ -306,6 +310,104 @@ function Analytics() {
           </div>
         ) : (
           <div className="space-y-8 bg-white">
+            {/* Driver Profile Card */}
+            <div className="mb-6">
+              <Card className="w-full">
+                <div className="p-4">
+                  {/* Content */}
+                  <div className="flex items-start">
+                    {/* Left Section - Driver Image */}
+                    <div className="flex-shrink-0 mr-6">
+                      <div className="w-24 h-24 rounded-full bg-gray-200 overflow-hidden border-4 border-gray-100 shadow-lg">
+                        <img
+                          src={`/driver-images/${driverProfile?.code?.toLowerCase()}.png`}
+                          alt={driverProfile ? `${driverProfile.forename} ${driverProfile.surname}` : 'Driver'}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.parentElement.innerHTML = `<div class="flex items-center justify-center w-full h-full bg-gray-200 text-2xl font-bold text-gray-400">${driverProfile?.code || '?'}</div>`;
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Middle Section - Driver Info */}
+                    <div className="flex-grow">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          {/* Driver Name and Number */}
+                          <div className="flex items-center space-x-3">
+                            <h2 className="text-2xl font-bold text-gray-900">
+                              {driverProfile ? `${driverProfile.forename} ${driverProfile.surname}` : ''}
+                            </h2>
+                            <span className="inline-flex items-center px-3 py-0.5 rounded-full text-lg font-bold bg-red-100 text-red-800">
+                              #{driverProfile?.number || ''}
+                            </span>
+                          </div>
+
+                          {/* Driver Code and Nationality */}
+                          <div className="flex items-center mt-2 space-x-6">
+                            <span className="text-xl font-bold text-gray-500">
+                              {driverProfile?.code || ''}
+                            </span>
+                            <div className="flex items-center space-x-2">
+                              <img
+                                src={`https://flagcdn.com/w40/${driverProfile?.nationality?.toLowerCase().slice(0, 2)}.png`}
+                                alt={driverProfile?.nationality}
+                                className="h-5 rounded shadow-sm"
+                              />
+                              <span className="text-sm text-gray-600 font-medium">
+                                {driverProfile?.nationality || ''}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Additional Info */}
+                          <div className="mt-2">
+                            <div className="text-xs text-gray-500">Date of Birth</div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {driverProfile ? new Date(driverProfile.dob).toLocaleDateString() : ''}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right Section - Team Info */}
+                        <div className="text-right flex flex-col items-end">
+                          <div className="h-24 w-64 flex items-center justify-end">
+                            {driverProfile?.constructor_name ? (
+                              <img
+                                src={`/team-logos/${driverProfile.constructor_name.toLowerCase()
+                                  .replace(/\s+f1\s+team/i, '')  // Remove "F1 Team" from names
+                                  .replace(/\s+/g, '-')  // Replace spaces with hyphens
+                                  .trim()}.png`}
+                                alt={driverProfile.constructor_name}
+                                className="h-full object-contain"
+                                onError={(e) => {
+                                  e.target.parentElement.innerHTML = `<div class="text-lg font-bold text-gray-800">${driverProfile.constructor_name}</div>`;
+                                }}
+                              />
+                            ) : (
+                              <div className="h-24 w-64 bg-gray-100 rounded animate-pulse" />
+                            )}
+                          </div>
+                          <a
+                            href={driverProfile?.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center mt-3 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            Wikipedia
+                            <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
             {/* Overview Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 bg-white">
               <Card className="bg-white">

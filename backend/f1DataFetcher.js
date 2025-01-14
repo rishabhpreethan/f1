@@ -58,14 +58,15 @@ const fetchRaceSchedule = async () => {
     if (!data?.RaceTable?.Races) return;
 
     const stmt = db.prepare(`
-        INSERT OR REPLACE INTO races (season_id, round, name, date, time, url)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO races (season_id, circuit_id, round, name, date, time, url)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     data.RaceTable.Races.forEach(race => {
         console.log(`📍 Processing race: ${race.raceName}`);
         stmt.run(
             SEASON,
+            race.Circuit.circuitId,
             race.round,
             race.raceName,
             race.date,

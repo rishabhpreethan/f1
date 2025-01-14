@@ -6,17 +6,6 @@ CREATE TABLE IF NOT EXISTS seasons (
     url TEXT
 );
 
-CREATE TABLE IF NOT EXISTS races (
-    race_id INTEGER PRIMARY KEY,
-    season_id INTEGER,
-    round INTEGER,
-    name TEXT,
-    date TEXT,
-    time TEXT,
-    url TEXT,
-    FOREIGN KEY (season_id) REFERENCES seasons(season_id)
-);
-
 CREATE TABLE IF NOT EXISTS circuits (
     circuit_id TEXT PRIMARY KEY,
     name TEXT,
@@ -25,6 +14,19 @@ CREATE TABLE IF NOT EXISTS circuits (
     lat REAL,
     lng REAL,
     url TEXT
+);
+
+CREATE TABLE IF NOT EXISTS races (
+    race_id INTEGER PRIMARY KEY,
+    season_id INTEGER,
+    circuit_id TEXT,
+    round INTEGER,
+    name TEXT,
+    date TEXT,
+    time TEXT,
+    url TEXT,
+    FOREIGN KEY (season_id) REFERENCES seasons(season_id),
+    FOREIGN KEY (circuit_id) REFERENCES circuits(circuit_id)
 );
 
 CREATE TABLE IF NOT EXISTS drivers (

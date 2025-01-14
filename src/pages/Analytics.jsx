@@ -361,19 +361,18 @@ function Analytics() {
           <div className="space-y-8 bg-white">
             {/* Driver Profile Card */}
             <div className="mb-6">
-              <Card className="w-full">
-                <div className="p-4">
-                  {/* Content */}
+              <Card className="w-full bg-white">
+                <div className="p-6">
                   <div className="flex items-start">
                     {/* Left Section - Driver Image */}
-                    <div className="flex-shrink-0 mr-6">
-                      <div className="w-24 h-24 rounded-full bg-gray-200 overflow-hidden border-4 border-gray-100 shadow-lg">
+                    <div className="flex-shrink-0 mr-8">
+                      <div className="w-28 h-28 rounded-xl overflow-hidden bg-gray-50 shadow-sm">
                         <img
                           src={`/driver-images/${driverProfile?.code?.toLowerCase()}.png`}
                           alt={driverProfile ? `${driverProfile.forename} ${driverProfile.surname}` : 'Driver'}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            e.target.parentElement.innerHTML = `<div class="flex items-center justify-center w-full h-full bg-gray-200 text-2xl font-bold text-gray-400">${driverProfile?.code || '?'}</div>`;
+                            e.target.parentElement.innerHTML = `<div class="flex items-center justify-center w-full h-full bg-gray-50 text-2xl font-bold text-gray-400">${driverProfile?.code || '?'}</div>`;
                           }}
                         />
                       </div>
@@ -384,75 +383,71 @@ function Analytics() {
                       <div className="flex items-start justify-between">
                         <div>
                           {/* Driver Name and Number */}
-                          <div className="flex items-center space-x-3">
-                            <h2 className="text-2xl font-bold text-gray-900">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <h2 className="text-2xl font-semibold text-gray-900">
                               {driverProfile ? `${driverProfile.forename} ${driverProfile.surname}` : ''}
                             </h2>
-                            <span className="inline-flex items-center px-3 py-0.5 rounded-full text-lg font-bold bg-red-100 text-red-800">
+                            <span className="inline-flex items-center px-2.5 py-0.5 text-lg font-medium text-red-600">
                               #{driverProfile?.number || ''}
                             </span>
                           </div>
 
                           {/* Driver Code and Nationality */}
-                          <div className="flex items-center mt-2 space-x-6">
-                            <span className="text-xl font-bold text-gray-500">
+                          <div className="flex items-center space-x-4 mb-4">
+                            <span className="text-lg font-medium text-gray-500">
                               {driverProfile?.code || ''}
                             </span>
                             <div className="flex items-center space-x-2">
-                              {console.log('Driver nationality:', driverProfile?.nationality)}
                               <img
                                 src={`/flag-images/${getCountryCode(driverProfile?.nationality)}.png`}
                                 alt={driverProfile?.nationality}
-                                className="h-5 w-auto object-contain rounded shadow-sm"
+                                className="h-4 w-auto object-contain"
                                 onError={(e) => {
-                                  console.log('Flag load error for:', driverProfile?.nationality);
                                   e.target.style.display = 'none';
                                 }}
                               />
-                              <span className="text-sm text-gray-600 font-medium">
+                              <span className="text-sm text-gray-600">
                                 {driverProfile?.nationality || ''}
                               </span>
                             </div>
                           </div>
 
-                          {/* Additional Info */}
-                          <div className="mt-2">
-                            <div className="text-xs text-gray-500">Date of Birth</div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {driverProfile ? new Date(driverProfile.dob).toLocaleDateString() : ''}
-                            </div>
+                          {/* Date of Birth */}
+                          <div className="text-sm text-gray-500">
+                            Born {driverProfile ? new Date(driverProfile.dob).toLocaleDateString('en-US', { 
+                              day: 'numeric', 
+                              month: 'long', 
+                              year: 'numeric' 
+                            }) : ''}
                           </div>
                         </div>
 
-                        {/* Right Section - Team Info */}
-                        <div className="text-right flex flex-col items-end">
-                          <div className="h-24 w-64 flex items-center justify-end">
+                        {/* Right Section - Team Logo */}
+                        <div className="flex flex-col items-end justify-between h-full min-h-[7rem]">
+                          <div className="relative h-16 w-44">
                             {driverProfile?.constructor_name ? (
                               <img
                                 src={`/team-logos/${driverProfile.constructor_name.toLowerCase()
-                                  .replace(/\s+f1\s+team/i, '')  // Remove "F1 Team" from names
-                                  .replace(/\s+/g, '-')  // Replace spaces with hyphens
+                                  .replace(/\s+f1\s+team/i, '')
+                                  .replace(/\s+/g, '-')
                                   .trim()}.png`}
                                 alt={driverProfile.constructor_name}
-                                className="h-full object-contain"
+                                className="absolute inset-0 w-full h-full object-contain object-right opacity-90"
                                 onError={(e) => {
-                                  e.target.parentElement.innerHTML = `<div class="text-lg font-bold text-gray-800">${driverProfile.constructor_name}</div>`;
+                                  e.target.parentElement.innerHTML = `<div class="absolute inset-0 flex items-center justify-end text-base font-medium text-gray-600">${driverProfile.constructor_name}</div>`;
                                 }}
                               />
                             ) : (
-                              <div className="h-24 w-64 bg-gray-100 rounded animate-pulse" />
+                              <div className="absolute inset-0 bg-gray-50 rounded animate-pulse" />
                             )}
                           </div>
                           <a
                             href={driverProfile?.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center mt-3 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            className="text-xs text-gray-500 hover:text-gray-700 transition-colors duration-150"
                           >
-                            Wikipedia
-                            <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
+                            View on Wikipedia →
                           </a>
                         </div>
                       </div>

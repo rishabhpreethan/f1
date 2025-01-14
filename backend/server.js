@@ -427,6 +427,43 @@ app.get('/api/race-results/:driverId', async (req, res) => {
   }
 });
 
+// Get sprint results for a driver
+app.get('/api/sprint-results/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      SELECT 
+        r.round,
+        r.name as race_name,
+        sr.position,
+        sr.points,
+        c.name as constructor_name
+      FROM sprint_results sr
+      JOIN races r ON sr.race_id = r.race_id
+      JOIN race_results rr ON sr.race_id = rr.race_id AND sr.driver_id = rr.driver_id
+      JOIN constructors c ON rr.constructor_id = c.constructor_id
+      WHERE sr.driver_id = ?
+      ORDER BY r.round
+    `;
+
+    db.all(query, [driverId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching sprint results:', err);
+        res.status(500).json({ error: 'Failed to fetch sprint results' });
+        return;
+      }
+      res.json(rows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/sprint-results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

@@ -14,13 +14,14 @@ const Navbar = () => {
 
   return (
     <AppBar 
-      position="static" 
+      position="sticky" 
       sx={{ 
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         backdropFilter: 'blur(8px)',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
         height: '48px',
-        zIndex: 1000,
+        zIndex: 1100,
+        top: 0,
       }}
     >
       <Container maxWidth="xl">

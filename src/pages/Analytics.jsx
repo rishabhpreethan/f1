@@ -124,7 +124,7 @@ function Analytics() {
   const [qualifyingResults, setQualifyingResults] = useState([]);
   const [raceResults, setRaceResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
-  const [activeTab, setActiveTab] = useState('qualifying'); // 'qualifying' or 'race'
+  const [activeTab, setActiveTab] = useState('race'); // 'qualifying' or 'race'
   const [loading, setLoading] = useState(true);
   const [positionsRange, setPositionsRange] = useState({ min: -20, max: 20 });
 
@@ -799,19 +799,10 @@ function Analytics() {
                         className="absolute h-full top-0 transition-transform duration-200 ease-in-out rounded-[--radius]"
                         style={{
                           width: '50%',
-                          transform: `translateX(${activeTab === 'qualifying' ? '0%' : '100%'})`,
+                          transform: `translateX(${activeTab === 'race' ? '0%' : '100%'})`,
                           backgroundColor: '#ffffff'
                         }}
                       />
-                      <button
-                        onClick={() => setActiveTab('qualifying')}
-                        style={{
-                          color: activeTab === 'qualifying' ? '#ffffff' : '#71717a'
-                        }}
-                        className="relative flex-1 px-3 py-1.5 text-sm font-medium rounded-[--radius] transition-colors duration-200 focus:outline-none"
-                      >
-                        Qualifying Results
-                      </button>
                       <button
                         onClick={() => setActiveTab('race')}
                         style={{
@@ -821,31 +812,45 @@ function Analytics() {
                       >
                         Race Results
                       </button>
+                      <button
+                        onClick={() => setActiveTab('qualifying')}
+                        style={{
+                          color: activeTab === 'qualifying' ? '#ffffff' : '#71717a'
+                        }}
+                        className="relative flex-1 px-3 py-1.5 text-sm font-medium rounded-[--radius] transition-colors duration-200 focus:outline-none"
+                      >
+                        Qualifying Results
+                      </button>
                     </div>
                   </div>
 
                   {/* Tables */}
                   <div className="overflow-x-auto">
-                    {activeTab === 'qualifying' ? (
+                    {activeTab === 'race' ? (
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Race</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Q1</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Q2</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Q3</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Race</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grid</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Points</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fastest Lap</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {qualifyingResults.map((result, index) => (
+                          {raceResults.map((result, index) => (
                             <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                <span className="text-gray-500">P{result.grid}</span>
+                              </td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
                                   result.position <= 3 ? 'bg-green-100 text-green-800' : 
                                   result.position <= 10 ? 'bg-blue-100 text-blue-800' : 
                                   'bg-gray-100 text-gray-800'
@@ -853,10 +858,30 @@ function Analytics() {
                                   P{result.position}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">{result.q1_time || '-'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">{result.q2_time || '-'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">{result.q3_time || '-'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.constructor_name}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.points}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                  result.status === 'Finished' ? 'bg-green-100 text-green-800' : 
+                                  result.status.startsWith('+') ? 'bg-yellow-100 text-yellow-800' : 
+                                  'bg-red-100 text-red-800'
+                                }`}>
+                                  {result.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm font-mono text-gray-900">{result.time || '-'}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                {result.fastest_lap_time ? (
+                                  <div>
+                                    {result.fastest_lap === 1 && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                        FL
+                                      </span>
+                                    )}
+                                    <span className="text-xs font-mono text-gray-500 ml-1">{result.fastest_lap_time}</span>
+                                  </div>
+                                ) : '-'}
+                              </td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.constructor_name}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -865,27 +890,22 @@ function Analytics() {
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Race</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grid</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Points</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fastest Lap</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Race</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Q1</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Q2</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Q3</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {raceResults.map((result, index) => (
+                          {qualifyingResults.map((result, index) => (
                             <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <span className="text-gray-500">P{result.grid}</span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
                                   result.position <= 3 ? 'bg-green-100 text-green-800' : 
                                   result.position <= 10 ? 'bg-blue-100 text-blue-800' : 
                                   'bg-gray-100 text-gray-800'
@@ -893,28 +913,10 @@ function Analytics() {
                                   P{result.position}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.points}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  result.status === 'Finished' ? 'bg-green-100 text-green-800' : 
-                                  result.status === 'DNF' ? 'bg-red-100 text-red-800' : 
-                                  'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {result.status}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">{result.time || '-'}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {result.fastest_lap ? (
-                                  <div className="space-y-1">
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                      Fastest Lap
-                                    </span>
-                                    <div className="text-xs font-mono text-gray-500">{result.fastest_lap_time}</div>
-                                  </div>
-                                ) : '-'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{result.constructor_name}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-mono">{result.q1_time || '-'}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-mono">{result.q2_time || '-'}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-mono">{result.q3_time || '-'}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.constructor_name}</td>
                             </tr>
                           ))}
                         </tbody>

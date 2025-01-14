@@ -128,6 +128,39 @@ function Analytics() {
   const [loading, setLoading] = useState(true);
   const [positionsRange, setPositionsRange] = useState({ min: -20, max: 20 });
 
+  // Helper function to get country code from nationality
+  const getCountryCode = (nationality) => {
+    const countryMap = {
+      'British': 'gb',
+      'Dutch': 'nl',
+      'Mexican': 'mx',
+      'Spanish': 'es',
+      'French': 'fr',
+      'Australian': 'au',
+      'German': 'de',
+      'Finnish': 'fi',
+      'Danish': 'dk',
+      'Canadian': 'ca',
+      'Japanese': 'jp',
+      'Chinese': 'cn',
+      'Thai': 'th',
+      'American': 'us',
+      'Italian': 'it',
+      'Brazilian': 'br',
+      'Russian': 'ru',
+      'Polish': 'pl',
+      'Belgian': 'be',
+      'Swedish': 'se',
+      'Austrian': 'at',
+      'Swiss': 'ch',
+      'Hungarian': 'hu',
+      'Portuguese': 'pt',
+      'Monégasque': 'mc',
+      'New Zealander': 'nz'
+    };
+    return countryMap[nationality] || nationality?.toLowerCase()?.slice(0, 2);
+  };
+
   // Fetch drivers for dropdown
   useEffect(() => {
     fetch('http://localhost:3001/api/drivers')
@@ -350,10 +383,15 @@ function Analytics() {
                               {driverProfile?.code || ''}
                             </span>
                             <div className="flex items-center space-x-2">
+                              {console.log('Driver nationality:', driverProfile?.nationality)}
                               <img
-                                src={`https://flagcdn.com/w40/${driverProfile?.nationality?.toLowerCase().slice(0, 2)}.png`}
+                                src={`/flag-images/${getCountryCode(driverProfile?.nationality)}.png`}
                                 alt={driverProfile?.nationality}
-                                className="h-5 rounded shadow-sm"
+                                className="h-5 w-auto object-contain rounded shadow-sm"
+                                onError={(e) => {
+                                  console.log('Flag load error for:', driverProfile?.nationality);
+                                  e.target.style.display = 'none';
+                                }}
                               />
                               <span className="text-sm text-gray-600 font-medium">
                                 {driverProfile?.nationality || ''}

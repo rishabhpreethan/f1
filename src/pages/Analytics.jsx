@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -21,7 +21,8 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Trophy, Flag, Timer, TrendingUp, Medal } from "lucide-react";
+import { Trophy, Flag, Timer, TrendingUp, Medal, ChevronDown, ChevronUp } from "lucide-react";
+import { Slider } from "../components/ui/slider";
 
 const CustomDot = (props) => {
   const { cx, cy, payload } = props;
@@ -120,8 +121,48 @@ function Analytics() {
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [drivers, setDrivers] = useState([]);
   const [driverStats, setDriverStats] = useState(null);
+  const [driverProfile, setDriverProfile] = useState(null);
+  const [qualifyingResults, setQualifyingResults] = useState([]);
+  const [raceResults, setRaceResults] = useState([]);
+  const [sprintResults, setSprintResults] = useState([]);
+  const [showResults, setShowResults] = useState(false);
+  const [activeTab, setActiveTab] = useState('race'); // 'qualifying', 'race', or 'sprint'
   const [loading, setLoading] = useState(true);
   const [positionsRange, setPositionsRange] = useState({ min: -20, max: 20 });
+  const resultsRef = useRef(null);
+
+  // Helper function to get country code from nationality
+  const getCountryCode = (nationality) => {
+    const countryMap = {
+      'British': 'gb',
+      'Dutch': 'nl',
+      'Mexican': 'mx',
+      'Spanish': 'es',
+      'French': 'fr',
+      'Australian': 'au',
+      'German': 'de',
+      'Finnish': 'fi',
+      'Danish': 'dk',
+      'Canadian': 'ca',
+      'Japanese': 'jp',
+      'Chinese': 'cn',
+      'Thai': 'th',
+      'American': 'us',
+      'Italian': 'it',
+      'Brazilian': 'br',
+      'Russian': 'ru',
+      'Polish': 'pl',
+      'Belgian': 'be',
+      'Swedish': 'se',
+      'Austrian': 'at',
+      'Swiss': 'ch',
+      'Hungarian': 'hu',
+      'Portuguese': 'pt',
+      'Monégasque': 'mc',
+      'New Zealander': 'nz'
+    };
+    return countryMap[nationality] || nationality?.toLowerCase()?.slice(0, 2);
+  };
 
   // Fetch drivers for dropdown
   useEffect(() => {
@@ -140,21 +181,30 @@ function Analytics() {
   useEffect(() => {
     if (selectedDriver) {
       setLoading(true);
-      fetch(`http://localhost:3001/api/driver-stats/${selectedDriver}`)
-        .then(res => {
-          if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
-          }
-          return res.json();
-        })
-        .then(data => {
-          console.log('Received data:', data);
-          if (!data.pointsProgression || !data.racePositions) {
+      Promise.all([
+        fetch(`http://localhost:3001/api/driver-stats/${selectedDriver}`),
+        fetch(`http://localhost:3001/api/qualifying-results/${selectedDriver}`),
+        fetch(`http://localhost:3001/api/race-results/${selectedDriver}`),
+        fetch(`http://localhost:3001/api/sprint-results/${selectedDriver}`),
+        fetch(`http://localhost:3001/api/driver-profile/${selectedDriver}`)
+      ])
+        .then(async ([statsRes, qualifyingRes, raceRes, sprintRes, profileRes]) => {
+          const [statsData, qualifyingData, raceData, sprintData, profileData] = await Promise.all([
+            statsRes.json(),
+            qualifyingRes.json(),
+            raceRes.json(),
+            sprintRes.json(),
+            profileRes.json()
+          ]);
+
+          // Process stats data
+          if (!statsData.pointsProgression || !statsData.racePositions) {
             throw new Error('Invalid data format received');
           }
+
           // Process the data to ensure numbers and calculate cumulative points
           const processedData = {
-            pointsProgression: data.pointsProgression.map((item, index, arr) => {
+            pointsProgression: statsData.pointsProgression.map((item, index, arr) => {
               // Calculate cumulative points
               const cumulativePoints = arr
                 .slice(0, index + 1)
@@ -169,28 +219,28 @@ function Analytics() {
                 raceName: item.raceName
               };
             }),
-            racePositions: data.racePositions.map(item => ({
+            racePositions: statsData.racePositions.map(item => ({
               round: Number(item.round),
               position: Number(item.position || 20),
               raceName: item.raceName
             })),
             stats: {
-              wins: data.stats?.wins || 0,
-              podiums: data.stats?.podiums || 0,
-              dnf: data.stats?.dnf || 0,
-              championship_position: data.stats?.championship_position || '-'
+              wins: statsData.stats?.wins || 0,
+              podiums: statsData.stats?.podiums || 0,
+              dnf: statsData.stats?.dnf || 0,
+              championship_position: statsData.stats?.championship_position || '-'
             },
-            qualifyingVsRace: data.qualifyingVsRace.map(item => ({
+            qualifyingVsRace: statsData.qualifyingVsRace.map(item => ({
               round: Number(item.round),
               qualifying_position: Number(item.qualifying_position || 20),
               race_position: Number(item.race_position || 20),
               raceName: item.raceName,
               performance: item.performance,
-              positions_gained: Number(item.race_position) - Number(item.qualifying_position)
+              positions_gained: Number(item.qualifying_position) - Number(item.race_position)
             })),
             teammateComparison: (() => {
               // Group by round
-              const byRound = data.teammateComparison.reduce((acc, item) => {
+              const byRound = statsData.teammateComparison.reduce((acc, item) => {
                 acc[item.round] = acc[item.round] || {
                   round: Number(item.round),
                   raceName: item.raceName
@@ -200,8 +250,8 @@ function Analytics() {
               }, {});
 
               // Get unique driver codes, ensuring selected driver is first
-              const driverCodes = [...new Set(data.teammateComparison.map(item => item.driver_code))];
-              const selectedDriverCode = data.teammateComparison.find(item => item.driver_id === selectedDriver)?.driver_code;
+              const driverCodes = [...new Set(statsData.teammateComparison.map(item => item.driver_code))];
+              const selectedDriverCode = statsData.teammateComparison.find(item => item.driver_id === selectedDriver)?.driver_code;
               
               // Sort drivers so selected driver is first
               const sortedDriverCodes = [
@@ -221,8 +271,8 @@ function Analytics() {
           setDriverStats(processedData);
 
           // Find min and max positions gained/lost
-          const positionsGainedData = data.qualifyingVsRace.map(item => 
-            Number(item.race_position) - Number(item.qualifying_position)
+          const positionsGainedData = statsData.qualifyingVsRace.map(item => 
+            Number(item.qualifying_position) - Number(item.race_position)
           );
           const maxGained = Math.max(...positionsGainedData);
           const minGained = Math.min(...positionsGainedData);
@@ -233,15 +283,23 @@ function Analytics() {
           
           setPositionsRange({ min: minPadded, max: maxPadded });
 
+          setQualifyingResults(qualifyingData);
+          setRaceResults(raceData);
+          setSprintResults(sprintData);
+          setDriverProfile(profileData);
+
           setLoading(false);
         })
         .catch(error => {
-          console.error('Error fetching driver stats:', error);
+          console.error('Error fetching data:', error);
           setLoading(false);
           setDriverStats({
             pointsProgression: [],
             racePositions: []
           });
+          setQualifyingResults([]);
+          setRaceResults([]);
+          setSprintResults([]);
         });
     }
   }, [selectedDriver]);
@@ -257,6 +315,15 @@ function Analytics() {
     .filter(item => item.position > 0)
     .reduce((sum, item, _, arr) => sum + item.position / arr.length, 0)
     .toFixed(1) || '-';
+
+  const toggleResults = () => {
+    setShowResults(!showResults);
+    if (!showResults) {
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen w-full bg-white">
@@ -292,6 +359,109 @@ function Analytics() {
           </div>
         ) : (
           <div className="space-y-8 bg-white">
+            {/* Driver Profile Card */}
+            <div className="mb-6">
+              <Card className="w-full">
+                <div className="p-4">
+                  {/* Content */}
+                  <div className="flex items-start">
+                    {/* Left Section - Driver Image */}
+                    <div className="flex-shrink-0 mr-6">
+                      <div className="w-24 h-24 rounded-full bg-gray-200 overflow-hidden border-4 border-gray-100 shadow-lg">
+                        <img
+                          src={`/driver-images/${driverProfile?.code?.toLowerCase()}.png`}
+                          alt={driverProfile ? `${driverProfile.forename} ${driverProfile.surname}` : 'Driver'}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.parentElement.innerHTML = `<div class="flex items-center justify-center w-full h-full bg-gray-200 text-2xl font-bold text-gray-400">${driverProfile?.code || '?'}</div>`;
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Middle Section - Driver Info */}
+                    <div className="flex-grow">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          {/* Driver Name and Number */}
+                          <div className="flex items-center space-x-3">
+                            <h2 className="text-2xl font-bold text-gray-900">
+                              {driverProfile ? `${driverProfile.forename} ${driverProfile.surname}` : ''}
+                            </h2>
+                            <span className="inline-flex items-center px-3 py-0.5 rounded-full text-lg font-bold bg-red-100 text-red-800">
+                              #{driverProfile?.number || ''}
+                            </span>
+                          </div>
+
+                          {/* Driver Code and Nationality */}
+                          <div className="flex items-center mt-2 space-x-6">
+                            <span className="text-xl font-bold text-gray-500">
+                              {driverProfile?.code || ''}
+                            </span>
+                            <div className="flex items-center space-x-2">
+                              {console.log('Driver nationality:', driverProfile?.nationality)}
+                              <img
+                                src={`/flag-images/${getCountryCode(driverProfile?.nationality)}.png`}
+                                alt={driverProfile?.nationality}
+                                className="h-5 w-auto object-contain rounded shadow-sm"
+                                onError={(e) => {
+                                  console.log('Flag load error for:', driverProfile?.nationality);
+                                  e.target.style.display = 'none';
+                                }}
+                              />
+                              <span className="text-sm text-gray-600 font-medium">
+                                {driverProfile?.nationality || ''}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Additional Info */}
+                          <div className="mt-2">
+                            <div className="text-xs text-gray-500">Date of Birth</div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {driverProfile ? new Date(driverProfile.dob).toLocaleDateString() : ''}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right Section - Team Info */}
+                        <div className="text-right flex flex-col items-end">
+                          <div className="h-24 w-64 flex items-center justify-end">
+                            {driverProfile?.constructor_name ? (
+                              <img
+                                src={`/team-logos/${driverProfile.constructor_name.toLowerCase()
+                                  .replace(/\s+f1\s+team/i, '')  // Remove "F1 Team" from names
+                                  .replace(/\s+/g, '-')  // Replace spaces with hyphens
+                                  .trim()}.png`}
+                                alt={driverProfile.constructor_name}
+                                className="h-full object-contain"
+                                onError={(e) => {
+                                  e.target.parentElement.innerHTML = `<div class="text-lg font-bold text-gray-800">${driverProfile.constructor_name}</div>`;
+                                }}
+                              />
+                            ) : (
+                              <div className="h-24 w-64 bg-gray-100 rounded animate-pulse" />
+                            )}
+                          </div>
+                          <a
+                            href={driverProfile?.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center mt-3 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            Wikipedia
+                            <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
             {/* Overview Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 bg-white">
               <Card className="bg-white">
@@ -481,7 +651,7 @@ function Analytics() {
                                     </div>
                                     <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-white/20">
                                       <span className="text-xs font-medium">Positions Gained/Lost</span>
-                                      <span className="ml-auto text-xs font-mono">{data.positions_gained >= 0 ? `-${Math.abs(data.positions_gained)}` : `+${Math.abs(data.positions_gained)}`}</span>
+                                      <span className="ml-auto text-xs font-mono">{data.positions_gained > 0 ? `+${data.positions_gained}` : `${data.positions_gained}`}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -502,12 +672,12 @@ function Analytics() {
                             offset={12}
                             className="fill-white"
                             fontSize={12}
-                            formatter={(value) => (value < 0 ? `+${Math.abs(value)}` : `-${value}`)}
+                            formatter={(value) => (value > 0 ? `+${value}` : value)}
                           />
                           {driverStats.qualifyingVsRace?.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
-                              fill={entry.positions_gained < 0 ? '#ef4444' : '#22c55e'}
+                              fill={entry.positions_gained > 0 ? '#22c55e' : '#ef4444'}
                             />
                           ))}
                         </Bar>
@@ -565,7 +735,11 @@ function Analytics() {
                           stroke="#e00400"
                           strokeWidth={2}
                           name="Position"
-                          dot
+                          dot={{
+                            r: 3,
+                            strokeWidth: 2,
+                            fill: "white"
+                          }}
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -655,6 +829,204 @@ function Analytics() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Results Tables */}
+            <div className="mt-8">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                <button
+                  onClick={toggleResults}
+                className="w-full flex items-center justify-between p-4 bg-white border rounded-lg shadow-sm focus:outline-none whitespace-nowrap"
+                >
+                  <div className="flex items-center gap-2">
+                    <Timer className="h-5 w-5 text-gray-500" />
+                    <h3 className="text-lg font-semibold">Session Results</h3>
+                  </div>
+                  <div className={`transform transition-transform duration-300 ${showResults ? 'rotate-180' : ''}`}>
+                    <ChevronDown className="h-5 w-5 text-gray-500" />
+                  </div>
+                </button>
+                
+                <div 
+                  ref={resultsRef}
+                  className={`transform transition-all duration-300 ease-in-out origin-top ${showResults ? 'scale-y-100 opacity-100' : 'scale-y-0 opacity-0 h-0'}`}
+                >
+                  <div className="border-t border-gray-200">
+                    {/* Sliding Window Tabs */}
+                    <div className="space-y-4 bg-gray-100/80 p-4">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="relative w-full max-w-md">
+                          {/* Background Options */}
+                          <div className="relative flex w-full bg-gray-100/80 rounded-lg shadow-sm">
+                            {/* Sliding Window */}
+                            <div
+                              className="absolute inset-0 w-1/3 bg-white rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.1)] transition-transform duration-200 ease-out z-10"
+                              style={{
+                                transform: `translateX(${activeTab === 'race' ? '0%' : activeTab === 'qualifying' ? '100%' : '200%'})`
+                              }}
+                            />
+                            <button
+                              onClick={() => setActiveTab('race')}
+                              className={`relative flex-1 py-1.5 px-4 text-sm font-medium text-center bg-transparent rounded-lg z-20 focus:outline-none whitespace-nowrap ${
+                                activeTab === 'race' ? 'text-black' : 'text-gray-500'
+                              }`}
+                            >
+                              Race Results
+                            </button>
+                            <button
+                              onClick={() => setActiveTab('qualifying')}
+                              className={`relative flex-1 py-1.5 px-4 text-sm font-medium text-center bg-transparent rounded-lg z-20 focus:outline-none whitespace-nowrap ${
+                                activeTab === 'qualifying' ? 'text-black' : 'text-gray-500'
+                              }`}
+                            >
+                              Qualifying Results
+                            </button>
+                            <button
+                              onClick={() => setActiveTab('sprint')}
+                              className={`relative flex-1 py-1.5 px-4 text-sm font-medium text-center bg-transparent rounded-lg z-20 focus:outline-none whitespace-nowrap ${
+                                activeTab === 'sprint' ? 'text-black' : 'text-gray-500'
+                              }`}
+                            >
+                              Sprint Results
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tables */}
+                    <div className="overflow-x-auto">
+                      {activeTab === 'race' ? (
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Race</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grid</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Points</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fastest Lap</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {raceResults.map((result, index) => (
+                              <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                  <span className="text-gray-500">P{result.grid}</span>
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                    result.position <= 3 ? 'bg-green-100 text-green-800' : 
+                                    result.position <= 10 ? 'bg-blue-100 text-blue-800' : 
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    P{result.position}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.points}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                    result.status === 'Finished' ? 'bg-green-100 text-green-800' : 
+                                    result.status.startsWith('+') ? 'bg-yellow-100 text-yellow-800' : 
+                                    'bg-red-100 text-red-800'
+                                  }`}>
+                                    {result.status}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm font-mono text-gray-900">{result.time || '-'}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                  {result.fastest_lap_time ? (
+                                    <div>
+                                      {result.fastest_lap === 1 && (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                          FL
+                                        </span>
+                                      )}
+                                      <span className="text-xs font-mono text-gray-500 ml-1">{result.fastest_lap_time}</span>
+                                    </div>
+                                  ) : '-'}
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.constructor_name}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : activeTab === 'qualifying' ? (
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Race</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Q1</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Q2</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Q3</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {qualifyingResults.map((result, index) => (
+                              <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                    result.position <= 3 ? 'bg-green-100 text-green-800' : 
+                                    result.position <= 10 ? 'bg-blue-100 text-blue-800' : 
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    P{result.position}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-mono">{result.q1_time || '-'}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-mono">{result.q2_time || '-'}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-mono">{result.q3_time || '-'}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.constructor_name}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Race</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Points</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {sprintResults.map((result, index) => (
+                              <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                    result.position <= 3 ? 'bg-green-100 text-green-800' : 
+                                    result.position <= 8 ? 'bg-blue-100 text-blue-800' : 
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    P{result.position}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.points}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.constructor_name}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

@@ -2,6 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import { createUser, loginUser } from '../src/utils/auth.js';
 import sqlite3 from 'sqlite3';
+import ChatService from './chat_service.js';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -9,6 +13,9 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Initialize chat service with API key
+const chatService = new ChatService(process.env.GROQ_API_KEY || "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");
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -370,6 +377,40 @@ app.get('/api/race-results/:driverId', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   } finally {
     db.close();
+  }
+});
+
+// Add chat query endpoint
+app.post('/api/generate-query', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    console.log('Received prompt:', prompt);
+    
+    const query = await chatService.generateQuery(prompt);
+    res.json({ success: true, sqlQuery: query });
+  } catch (error) {
+    console.error('Error generating query:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to generate query' 
+    });
+  }
+});
+
+// Add execute query endpoint
+app.post('/api/execute-query', async (req, res) => {
+  try {
+    const { query } = req.body;
+    console.log('Executing query:', query);
+    
+    const results = await chatService.executeQuery(query);
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('Error in execute-query:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to execute query' 
+    });
   }
 });
 

@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 
-const sqlite = new Database('sqlite.db');
+const sqlite = new Database('../sqlite.db');
 
 // This will create the tables if they don't exist
 const main = async () => {

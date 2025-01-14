@@ -293,6 +293,86 @@ app.get('/api/driver-stats/:driverId', async (req, res) => {
   }
 });
 
+// Get qualifying results for a driver
+app.get('/api/qualifying-results/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      SELECT 
+        r.round,
+        r.name as race_name,
+        qr.position,
+        qr.q1_time,
+        qr.q2_time,
+        qr.q3_time,
+        c.name as constructor_name
+      FROM qualifying_results qr
+      JOIN races r ON qr.race_id = r.race_id
+      JOIN constructors c ON qr.constructor_id = c.constructor_id
+      WHERE qr.driver_id = ?
+      ORDER BY r.round
+    `;
+
+    db.all(query, [driverId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching qualifying results:', err);
+        res.status(500).json({ error: 'Failed to fetch qualifying results' });
+        return;
+      }
+      res.json(rows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/qualifying-results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
+// Get race results for a driver
+app.get('/api/race-results/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      SELECT 
+        r.round,
+        r.name as race_name,
+        rr.grid,
+        rr.position,
+        rr.points,
+        rr.laps,
+        rr.status,
+        rr.time,
+        rr.fastest_lap,
+        rr.fastest_lap_time,
+        c.name as constructor_name
+      FROM race_results rr
+      JOIN races r ON rr.race_id = r.race_id
+      JOIN constructors c ON rr.constructor_id = c.constructor_id
+      WHERE rr.driver_id = ?
+      ORDER BY r.round
+    `;
+
+    db.all(query, [driverId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching race results:', err);
+        res.status(500).json({ error: 'Failed to fetch race results' });
+        return;
+      }
+      res.json(rows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/race-results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

@@ -380,6 +380,14 @@ app.get('/api/race-results/:driverId', async (req, res) => {
 
   try {
     const query = `
+      WITH RaceFastestLaps AS (
+        SELECT 
+          race_id,
+          MIN(fastest_lap_time) as race_fastest_lap
+        FROM race_results
+        WHERE fastest_lap_time IS NOT NULL
+        GROUP BY race_id
+      )
       SELECT 
         r.round,
         r.name as race_name,
@@ -389,12 +397,16 @@ app.get('/api/race-results/:driverId', async (req, res) => {
         rr.laps,
         rr.status,
         rr.time,
-        rr.fastest_lap,
         rr.fastest_lap_time,
+        CASE 
+          WHEN rr.fastest_lap_time = rfl.race_fastest_lap THEN 1 
+          ELSE 0 
+        END as fastest_lap,
         c.name as constructor_name
       FROM race_results rr
       JOIN races r ON rr.race_id = r.race_id
       JOIN constructors c ON rr.constructor_id = c.constructor_id
+      LEFT JOIN RaceFastestLaps rfl ON rr.race_id = rfl.race_id
       WHERE rr.driver_id = ?
       ORDER BY r.round
     `;
@@ -409,6 +421,43 @@ app.get('/api/race-results/:driverId', async (req, res) => {
     });
   } catch (error) {
     console.error('Server error in /api/race-results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
+// Get sprint results for a driver
+app.get('/api/sprint-results/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      SELECT 
+        r.round,
+        r.name as race_name,
+        sr.position,
+        sr.points,
+        c.name as constructor_name
+      FROM sprint_results sr
+      JOIN races r ON sr.race_id = r.race_id
+      JOIN race_results rr ON sr.race_id = rr.race_id AND sr.driver_id = rr.driver_id
+      JOIN constructors c ON rr.constructor_id = c.constructor_id
+      WHERE sr.driver_id = ?
+      ORDER BY r.round
+    `;
+
+    db.all(query, [driverId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching sprint results:', err);
+        res.status(500).json({ error: 'Failed to fetch sprint results' });
+        return;
+      }
+      res.json(rows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/sprint-results:', error);
     res.status(500).json({ error: 'Internal server error' });
   } finally {
     db.close();

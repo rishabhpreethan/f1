@@ -23,6 +23,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Trophy, Flag, Timer, TrendingUp, Medal, ChevronDown, ChevronUp } from "lucide-react";
 import { Slider } from "../components/ui/slider";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import ConstructorAnalytics from "../components/ConstructorAnalytics";
 
 const CustomDot = (props) => {
   const { cx, cy, payload } = props;
@@ -328,6 +330,12 @@ function Analytics() {
   return (
     <div className="flex flex-col min-h-screen w-full bg-white">
       <div className="flex-1 space-y-8 p-8 pt-6 bg-white">
+      <Tabs defaultValue="drivers" className="space-y-8">
+        <TabsList className="grid w-[400px] grid-cols-2">
+          <TabsTrigger value="drivers">Drivers</TabsTrigger>
+          <TabsTrigger value="constructors">Constructors</TabsTrigger>
+        </TabsList>
+        <TabsContent value="drivers">
         <div className="flex items-center justify-between space-y-2">
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Driver Analytics</h2>
@@ -1025,6 +1033,11 @@ function Analytics() {
             </div>
           </div>
         )}
+        </TabsContent>
+        <TabsContent value="constructors">
+          <ConstructorAnalytics />
+        </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

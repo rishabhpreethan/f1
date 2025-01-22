@@ -464,6 +464,307 @@ app.get('/api/sprint-results/:driverId', async (req, res) => {
   }
 });
 
+// Get constructor points progression
+app.get('/api/constructor-stats/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const pointsQuery = `
+      WITH RacePoints AS (
+        SELECT 
+          r.round,
+          r.name as raceName,
+          c.name as constructorName,
+          GROUP_CONCAT(rr.points) as driver_points,
+          SUM(rr.points) as racePoints,
+          COALESCE(
+            (
+              SELECT SUM(sr.points)
+              FROM sprint_results sr
+              JOIN race_results rr2 ON sr.driver_id = rr2.driver_id AND sr.race_id = rr2.race_id
+              WHERE sr.race_id = r.race_id
+              AND rr2.constructor_id = c.constructor_id
+            ),
+            0
+          ) as sprintPoints
+        FROM races r
+        JOIN race_results rr ON r.race_id = rr.race_id
+        JOIN constructors c ON rr.constructor_id = c.constructor_id
+        WHERE c.constructor_id = ?
+        GROUP BY r.round, r.name
+      )
+      SELECT 
+        round,
+        raceName,
+        constructorName,
+        driver_points,
+        racePoints,
+        sprintPoints,
+        (racePoints + sprintPoints) as totalRacePoints,
+        SUM(racePoints + sprintPoints) OVER (ORDER BY round) as cumulativePoints
+      FROM RacePoints
+      ORDER BY round
+    `;
+
+    const statsQuery = `
+      WITH TotalPoints AS (
+        SELECT 
+          constructor_id,
+          SUM(points) as race_points
+        FROM race_results
+        GROUP BY constructor_id
+      ),
+      SprintPoints AS (
+        SELECT 
+          rr.constructor_id,
+          SUM(sr.points) as sprint_points
+        FROM sprint_results sr
+        JOIN race_results rr ON sr.driver_id = rr.driver_id AND sr.race_id = rr.race_id
+        GROUP BY rr.constructor_id
+      )
+      SELECT 
+        COUNT(CASE WHEN rr.position = 1 THEN 1 END) as wins,
+        COUNT(CASE WHEN rr.position <= 3 THEN 1 END) as podiums,
+        COALESCE(tp.race_points, 0) + COALESCE(sp.sprint_points, 0) as total_points,
+        (
+          SELECT COUNT(DISTINCT sr.race_id)
+          FROM sprint_results sr
+          JOIN race_results rr2 ON sr.driver_id = rr2.driver_id AND sr.race_id = rr2.race_id
+          WHERE rr2.constructor_id = rr.constructor_id
+          AND sr.position = 1
+        ) as sprint_wins
+      FROM race_results rr
+      LEFT JOIN TotalPoints tp ON rr.constructor_id = tp.constructor_id
+      LEFT JOIN SprintPoints sp ON rr.constructor_id = sp.constructor_id
+      WHERE rr.constructor_id = ?
+      GROUP BY rr.constructor_id, tp.race_points, sp.sprint_points;
+    `;
+
+    const getPoints = () => {
+      return new Promise((resolve, reject) => {
+        db.all(pointsQuery, [constructorId], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      });
+    };
+
+    const getStats = () => {
+      return new Promise((resolve, reject) => {
+        db.get(statsQuery, [constructorId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+    };
+
+    Promise.all([getPoints(), getStats()])
+      .then(([pointsData, statsData]) => {
+        res.json({
+          pointsProgression: pointsData,
+          stats: statsData
+        });
+      })
+      .catch(error => {
+        console.error('Database query error:', error);
+        res.status(500).json({ error: 'Database query failed' });
+      })
+      .finally(() => {
+        db.close();
+      });
+
+  } catch (error) {
+    console.error('Server error in /api/constructor-stats:', error);
+    res.status(500).json({ error: 'Internal server error' });
+    db.close();
+  }
+});
+
+// Get all constructors
+app.get('/api/constructors', async (req, res) => {
+  try {
+    const db = new sqlite3.Database('./backend/sqlite.db');
+    
+    db.all(`
+      SELECT 
+        constructor_id as constructorId,
+        name,
+        nationality
+      FROM constructors
+      ORDER BY name
+    `, [], (err, rows) => {
+      if (err) {
+        console.error('Error fetching constructors:', err);
+        res.status(500).json({ error: 'Failed to fetch constructors' });
+        return;
+      }
+      res.json(rows);
+    });
+
+    db.close();
+  } catch (error) {
+    console.error('Server error in /api/constructors:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get constructor profile
+app.get('/api/constructor-profile/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      WITH ConstructorStanding AS (
+        SELECT 
+          constructor_id,
+          SUM(points) as total_points,
+          RANK() OVER (ORDER BY SUM(points) DESC) as championship_position
+        FROM race_results
+        GROUP BY constructor_id
+      )
+      SELECT 
+        c.*,
+        cs.championship_position,
+        cs.total_points
+      FROM constructors c
+      LEFT JOIN ConstructorStanding cs ON c.constructor_id = cs.constructor_id
+      WHERE c.constructor_id = ?
+    `;
+
+    db.get(query, [constructorId], (err, row) => {
+      if (err) {
+        console.error('Error fetching constructor profile:', err);
+        res.status(500).json({ error: 'Failed to fetch constructor profile' });
+        return;
+      }
+      res.json(row);
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-profile:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
+// Get constructor drivers
+app.get('/api/constructor-drivers/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      SELECT DISTINCT 
+        d.driver_id,
+        d.code,
+        d.forename,
+        d.surname,
+        d.nationality,
+        d.url
+      FROM drivers d
+      JOIN race_results rr ON d.driver_id = rr.driver_id
+      WHERE rr.constructor_id = ?
+      ORDER BY d.surname
+    `;
+
+    db.all(query, [constructorId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching constructor drivers:', err);
+        res.status(500).json({ error: 'Failed to fetch constructor drivers' });
+        return;
+      }
+      res.json(rows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-drivers:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
+// Get driver points contribution for constructor
+app.get('/api/constructor-driver-points/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      WITH RacePoints AS (
+        SELECT 
+          r.round,
+          r.name as race_name,
+          d.driver_id,
+          d.code as driver_code,
+          rr.points as race_points,
+          COALESCE(
+            (
+              SELECT sr.points
+              FROM sprint_results sr
+              WHERE sr.race_id = r.race_id
+              AND sr.driver_id = d.driver_id
+            ),
+            0
+          ) as sprint_points
+        FROM races r
+        JOIN race_results rr ON r.race_id = rr.race_id
+        JOIN drivers d ON rr.driver_id = d.driver_id
+        WHERE rr.constructor_id = ?
+        ORDER BY r.round
+      )
+      SELECT 
+        round,
+        race_name,
+        driver_id,
+        driver_code,
+        race_points,
+        sprint_points,
+        (race_points + sprint_points) as total_points
+      FROM RacePoints
+      ORDER BY round, driver_code
+    `;
+
+    db.all(query, [constructorId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching driver points:', err);
+        res.status(500).json({ error: 'Failed to fetch driver points' });
+        return;
+      }
+
+      // Transform data for stacked area chart
+      const transformedData = rows.reduce((acc, row) => {
+        const existingRound = acc.find(d => d.round === row.round);
+        if (existingRound) {
+          existingRound[row.driver_code] = row.total_points;
+        } else {
+          const newRound = {
+            round: row.round,
+            raceName: row.race_name,
+          };
+          newRound[row.driver_code] = row.total_points;
+          acc.push(newRound);
+        }
+        return acc;
+      }, []);
+
+      // Get unique driver codes for the chart
+      const driverCodes = [...new Set(rows.map(row => row.driver_code))];
+
+      res.json({
+        pointsData: transformedData,
+        drivers: driverCodes
+      });
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-driver-points:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

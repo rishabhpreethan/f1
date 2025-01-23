@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -6,16 +6,27 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar
 } from "recharts";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "./ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Trophy, Flag, Timer, TrendingUp, Medal, ChevronDown, ChevronUp } from "lucide-react";
@@ -104,6 +115,13 @@ function ConstructorAnalytics() {
   const [driverPointsData, setDriverPointsData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showResults, setShowResults] = useState(false);
+  const [activeTab, setActiveTab] = useState('race');
+  const [raceResults, setRaceResults] = useState([]);
+  const [qualifyingResults, setQualifyingResults] = useState([]);
+  const [sprintResults, setSprintResults] = useState([]);
+  const resultsRef = useRef(null);
+  const resultsButtonRef = useRef(null);
 
   // Fetch constructors for dropdown
   useEffect(() => {
@@ -164,6 +182,38 @@ function ConstructorAnalytics() {
     }
   }, [selectedConstructor]);
 
+  useEffect(() => {
+    if (selectedConstructor) {
+      // Fetch race results
+      fetch(`http://localhost:3001/api/constructor-race-results/${selectedConstructor}`)
+        .then(res => res.json())
+        .then(data => setRaceResults(data))
+        .catch(error => console.error('Error fetching race results:', error));
+
+      // Fetch qualifying results
+      fetch(`http://localhost:3001/api/constructor-qualifying-results/${selectedConstructor}`)
+        .then(res => res.json())
+        .then(data => setQualifyingResults(data))
+        .catch(error => console.error('Error fetching qualifying results:', error));
+
+      // Fetch sprint results
+      fetch(`http://localhost:3001/api/constructor-sprint-results/${selectedConstructor}`)
+        .then(res => res.json())
+        .then(data => setSprintResults(data))
+        .catch(error => console.error('Error fetching sprint results:', error));
+    }
+  }, [selectedConstructor]);
+
+  const toggleResults = () => {
+    setShowResults(!showResults);
+    if (!showResults) {
+      // Wait for the animation to start before scrolling
+      setTimeout(() => {
+        resultsButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  };
+
   if (loading) {
     return <div className="text-center p-4">Loading...</div>;
   }
@@ -203,90 +253,95 @@ function ConstructorAnalytics() {
 
       {/* Constructor Profile Card */}
       {constructorProfile && (
-        <Card className="w-full">
-          <div className="p-6">
-            <div className="flex items-start justify-between">
-              {/* Left Section - Constructor Logo */}
-              <div className="flex-shrink-0 mr-8">
-                <div className="w-44 h-28">
-                  <img
-                    src={`/team-logos/${constructorProfile.name.toLowerCase()
-                      .replace(/\s+f1\s+team/i, '')
-                      .replace(/\s+/g, '-')
-                      .trim()}.png`}
-                    alt={constructorProfile.name}
-                    className="w-full h-full object-contain"
-                    onError={(e) => {
-                      e.target.parentElement.innerHTML = `<div class="flex items-center justify-center w-full h-full bg-gray-50 text-xl font-bold text-gray-400">${constructorProfile.name || '?'}</div>`;
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Middle Section - Constructor Info */}
-              <div className="flex-grow">
-                <div className="flex flex-col">
-                  <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                    {constructorProfile.name}
-                  </h2>
-                  <div className="flex items-center space-x-2 mb-4">
+        <div className="mb-6">
+          <Card className="w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                {/* Left Section - Constructor Logo */}
+                <div className="flex-shrink-0 mr-8">
+                  <div className="w-62 h-20">
                     <img
-                      src={`/flag-images/${getCountryCode(constructorProfile.nationality)}.png`}
-                      alt={constructorProfile.nationality}
-                      className="h-4 w-6 object-cover"
+                      src={`/team-logos/${constructorProfile.name.toLowerCase()
+                        .replace(/\s+f1\s+team/i, '')
+                        .replace(/\s+/g, '-')
+                        .trim()}.png`}
+                      alt={constructorProfile.name}
+                      className="w-full h-full object-contain"
                       onError={(e) => {
-                        e.target.style.display = 'none';
+                        e.target.parentElement.innerHTML = `<div class="flex items-center justify-center w-full h-full bg-gray-50 text-xl font-bold text-gray-400">${constructorProfile.name || '?'}</div>`;
                       }}
                     />
-                    <span className="text-sm text-gray-600">
-                      {constructorProfile.nationality}
-                    </span>
+                  </div>
+                </div>
+
+                {/* Middle Section - Constructor Info */}
+                <div className="flex-grow">
+                  <div className="flex flex-col">
+                    <h2 className="text-4xl font-semibold text-gray-900">
+                      {constructorProfile.name}
+                    </h2>
+                    <div className="flex items-center space-x-2 mt-1.5">
+                      <img
+                        src={`/flag-images/${getCountryCode(constructorProfile.nationality)}.png`}
+                        alt={constructorProfile.nationality}
+                        className="h-5 w-7 object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                      <span className="text-base text-gray-600">
+                        {constructorProfile.nationality}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Section - Drivers */}
+                <div className="flex-shrink-0 ml-8">
+                  <div className="flex space-x-6">
+                    {constructorDrivers.map((driver, index) => (
+                      <div key={driver.driver_id} className="text-center">
+                        <div className="w-20 h-20 mb-2 relative">
+                          <img
+                            src={`/driver-images/${driver.code.toLowerCase()}.png`}
+                            alt={`${driver.forename} ${driver.surname}`}
+                            className="w-full h-full object-cover rounded-full border-2 border-gray-200"
+                            onError={(e) => {
+                              e.target.src = `/driver-images/alb.png`;
+                            }}
+                          />
+                          <img
+                            src={`/flag-images/${getCountryCode(driver.nationality)}.png`}
+                            alt={driver.nationality}
+                            className="absolute bottom-0 right-0 w-6 h-4 object-cover border border-gray-200 shadow-sm"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                        <div className="text-sm font-medium text-gray-900">{driver.code}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
-
-              {/* Right Section - Drivers */}
-              <div className="flex-shrink-0 ml-8">
-                <div className="flex space-x-4">
-                  {constructorDrivers.map((driver, index) => (
-                    <div key={driver.driver_id} className="text-center">
-                      <div className="w-24 h-24 mb-2 relative">
-                        <img
-                          src={`/driver-images/${driver.code.toLowerCase()}.png`}
-                          alt={`${driver.forename} ${driver.surname}`}
-                          className="w-full h-full object-cover rounded-full border-2 border-gray-200"
-                          onError={(e) => {
-                            e.target.src = `/driver-images/alb.png`;
-                          }}
-                        />
-                        <img
-                          src={`/flag-images/${getCountryCode(driver.nationality)}.png`}
-                          alt={driver.nationality}
-                          className="absolute bottom-0 right-0 w-6 h-4 object-cover border border-gray-200 shadow-sm"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                          }}
-                        />
-                      </div>
-                      <div className="text-sm font-medium">{driver.code}</div>
-                    </div>
-                  ))}
-                </div>
+              {/* Wikipedia Link - Bottom Right */}
+              <div className="flex justify-end mt-2">
+                <a
+                  href={constructorProfile.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-150 flex items-center space-x-1"
+                >
+                  <span>View on Wikipedia</span>
+                  <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.22-7.22v5.69a.75.75 0 001.5 0v-7.5a.75.75 0 00-.75-.75h-7.5a.75.75 0 000 1.5h5.69l-7.22 7.22a.75.75 0 000 1.06z" clipRule="evenodd" />
+                  </svg>
+                </a>
               </div>
             </div>
-            {/* Wikipedia Link - Bottom Right */}
-            <div className="flex justify-end mt-4">
-              <a
-                href={constructorProfile.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:text-blue-800 transition-colors duration-150"
-              >
-                View on Wikipedia →
-              </a>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
       )}
 
       {/* Overview Cards */}
@@ -347,7 +402,7 @@ function ConstructorAnalytics() {
       )}
 
       {/* Charts Section */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 mt-8">
         {/* Points Progression Chart */}
         {constructorStats && (
           <Card>
@@ -499,6 +554,204 @@ function ConstructorAnalytics() {
             </CardContent>
           </Card>
         )}
+      </div>
+
+      {/* Results Tables */}
+      <div className="mt-8">
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+          <button
+            ref={resultsButtonRef}
+            onClick={toggleResults}
+            className="w-full flex items-center justify-between p-4 bg-white border rounded-lg shadow-sm focus:outline-none whitespace-nowrap"
+          >
+            <div className="flex items-center gap-2">
+              <Timer className="h-5 w-5 text-gray-500" />
+              <h3 className="text-lg font-semibold">Session Results</h3>
+            </div>
+            <div className={`transform transition-transform duration-300 ${showResults ? 'rotate-180' : ''}`}>
+              <ChevronDown className="h-5 w-5 text-gray-500" />
+            </div>
+          </button>
+          
+          <div 
+            ref={resultsRef}
+            className={`transform transition-all duration-300 ease-in-out origin-top ${showResults ? 'scale-y-100 opacity-100' : 'scale-y-0 opacity-0 h-0'}`}
+          >
+            <div className="border-t border-gray-200">
+              {/* Sliding Window Tabs */}
+              <div className="space-y-4 bg-gray-100/80 p-4">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="relative w-full max-w-md">
+                    {/* Background Options */}
+                    <div className="relative flex w-full bg-gray-100/80 rounded-lg shadow-sm">
+                      {/* Sliding Window */}
+                      <div
+                        className="absolute inset-0 w-1/3 bg-white rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.1)] transition-transform duration-200 ease-out z-10"
+                        style={{
+                          transform: `translateX(${activeTab === 'race' ? '0%' : activeTab === 'qualifying' ? '100%' : '200%'})`
+                        }}
+                      />
+                      <button
+                        onClick={() => setActiveTab('race')}
+                        className={`relative flex-1 py-1.5 px-4 text-sm font-medium text-center bg-transparent rounded-lg z-20 focus:outline-none whitespace-nowrap ${
+                          activeTab === 'race' ? 'text-black' : 'text-gray-500'
+                        }`}
+                      >
+                        Race Results
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('qualifying')}
+                        className={`relative flex-1 py-1.5 px-4 text-sm font-medium text-center bg-transparent rounded-lg z-20 focus:outline-none whitespace-nowrap ${
+                          activeTab === 'qualifying' ? 'text-black' : 'text-gray-500'
+                        }`}
+                      >
+                        Qualifying Results
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('sprint')}
+                        className={`relative flex-1 py-1.5 px-4 text-sm font-medium text-center bg-transparent rounded-lg z-20 focus:outline-none whitespace-nowrap ${
+                          activeTab === 'sprint' ? 'text-black' : 'text-gray-500'
+                        }`}
+                      >
+                        Sprint Results
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tables */}
+              <div className="overflow-x-auto">
+                {activeTab === 'race' ? (
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Race</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Driver</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grid</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Points</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {raceResults.map((result, index) => (
+                        result.drivers.map((driver, driverIndex) => (
+                          <tr key={`${index}-${driverIndex}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            {driverIndex === 0 && (
+                              <>
+                                <td rowSpan={result.drivers.length} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
+                                <td rowSpan={result.drivers.length} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
+                              </>
+                            )}
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{driver.code}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                              <span className="text-gray-500">P{driver.grid}</span>
+                            </td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                driver.position <= 3 ? 'bg-green-100 text-green-800' : 
+                                driver.position <= 10 ? 'bg-blue-100 text-blue-800' : 
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                P{driver.position}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{driver.points}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                driver.status === 'Finished' ? 'bg-green-100 text-green-800' : 
+                                driver.status.startsWith('+') ? 'bg-yellow-100 text-yellow-800' : 
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {driver.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm font-mono text-gray-900">{driver.time || '-'}</td>
+                          </tr>
+                        ))
+                      ))}
+                    </tbody>
+                  </table>
+                ) : activeTab === 'qualifying' ? (
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Race</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Driver</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {qualifyingResults.map((result, index) => (
+                        result.drivers.map((driver, driverIndex) => (
+                          <tr key={`${index}-${driverIndex}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            {driverIndex === 0 && (
+                              <>
+                                <td rowSpan={result.drivers.length} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
+                                <td rowSpan={result.drivers.length} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
+                              </>
+                            )}
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{driver.code}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                driver.position <= 3 ? 'bg-green-100 text-green-800' : 
+                                driver.position <= 10 ? 'bg-blue-100 text-blue-800' : 
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                P{driver.position}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Round</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Race</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Driver</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Points</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {sprintResults.map((result, index) => (
+                        result.drivers.map((driver, driverIndex) => (
+                          <tr key={`${index}-${driverIndex}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            {driverIndex === 0 && (
+                              <>
+                                <td rowSpan={result.drivers.length} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
+                                <td rowSpan={result.drivers.length} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
+                              </>
+                            )}
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{driver.code}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                driver.position <= 3 ? 'bg-green-100 text-green-800' : 
+                                driver.position <= 10 ? 'bg-blue-100 text-blue-800' : 
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                P{driver.position}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{driver.points}</td>
+                          </tr>
+                        ))
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>

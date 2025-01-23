@@ -765,6 +765,158 @@ app.get('/api/constructor-driver-points/:constructorId', async (req, res) => {
   }
 });
 
+// Get constructor race results
+app.get('/api/constructor-race-results/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      SELECT 
+        r.round,
+        r.name as race_name,
+        GROUP_CONCAT(COALESCE(rr.grid, '')) as grid,
+        GROUP_CONCAT(COALESCE(rr.position, '')) as position,
+        GROUP_CONCAT(COALESCE(rr.points, '0')) as points,
+        GROUP_CONCAT(COALESCE(rr.status, '')) as status,
+        GROUP_CONCAT(COALESCE(rr.time, '')) as time,
+        GROUP_CONCAT(d.code) as driver_codes
+      FROM races r
+      JOIN race_results rr ON r.race_id = rr.race_id
+      JOIN drivers d ON rr.driver_id = d.driver_id
+      WHERE rr.constructor_id = ?
+      GROUP BY r.round, r.name
+      ORDER BY r.round;
+    `;
+
+    db.all(query, [constructorId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching race results:', err);
+        res.status(500).json({ error: 'Failed to fetch race results' });
+        return;
+      }
+      
+      // Process the grouped data
+      const processedRows = rows.map(row => ({
+        round: row.round,
+        race_name: row.race_name,
+        drivers: row.driver_codes.split(',').map((code, index) => ({
+          code,
+          grid: row.grid.split(',')[index] || '',
+          position: row.position.split(',')[index] || '',
+          points: row.points.split(',')[index] || '0',
+          status: row.status.split(',')[index] || '',
+          time: row.time.split(',')[index] || ''
+        }))
+      }));
+
+      res.json(processedRows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-race-results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
+// Get constructor qualifying results
+app.get('/api/constructor-qualifying-results/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      SELECT 
+        r.round,
+        r.name as race_name,
+        GROUP_CONCAT(COALESCE(rr.grid, '')) as position,
+        GROUP_CONCAT(d.code) as driver_codes
+      FROM races r
+      JOIN race_results rr ON r.race_id = rr.race_id
+      JOIN drivers d ON rr.driver_id = d.driver_id
+      WHERE rr.constructor_id = ?
+      GROUP BY r.round, r.name
+      ORDER BY r.round;
+    `;
+
+    db.all(query, [constructorId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching qualifying results:', err);
+        res.status(500).json({ error: 'Failed to fetch qualifying results' });
+        return;
+      }
+
+      // Process the grouped data
+      const processedRows = rows.map(row => ({
+        round: row.round,
+        race_name: row.race_name,
+        drivers: row.driver_codes.split(',').map((code, index) => ({
+          code,
+          position: row.position.split(',')[index] || ''
+        }))
+      }));
+
+      res.json(processedRows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-qualifying-results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
+// Get constructor sprint results
+app.get('/api/constructor-sprint-results/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      SELECT 
+        r.round,
+        r.name as race_name,
+        GROUP_CONCAT(COALESCE(sr.position, '')) as position,
+        GROUP_CONCAT(COALESCE(sr.points, '0')) as points,
+        GROUP_CONCAT(d.code) as driver_codes
+      FROM races r
+      JOIN sprint_results sr ON r.race_id = sr.race_id
+      JOIN drivers d ON sr.driver_id = d.driver_id
+      JOIN race_results rr ON sr.driver_id = rr.driver_id AND r.race_id = rr.race_id
+      WHERE rr.constructor_id = ?
+      GROUP BY r.round, r.name
+      ORDER BY r.round;
+    `;
+
+    db.all(query, [constructorId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching sprint results:', err);
+        res.status(500).json({ error: 'Failed to fetch sprint results' });
+        return;
+      }
+
+      // Process the grouped data
+      const processedRows = rows.map(row => ({
+        round: row.round,
+        race_name: row.race_name,
+        drivers: row.driver_codes.split(',').map((code, index) => ({
+          code,
+          position: row.position.split(',')[index] || '',
+          points: row.points.split(',')[index] || '0'
+        }))
+      }));
+
+      res.json(processedRows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-sprint-results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

@@ -543,6 +543,7 @@ app.get('/api/constructor-stats/:constructorId', async (req, res) => {
           SELECT 
             COUNT(DISTINCT r.race_id) as totalRaces,
             COUNT(CASE WHEN rr.position = 1 THEN 1 END) as wins,
+            COUNT(CASE WHEN sr.position = 1 THEN 1 END) as sprintWins,
             COUNT(CASE WHEN rr.position <= 3 THEN 1 END) as podiums,
             COUNT(CASE WHEN rr.position <= 10 THEN 1 END) as pointFinishes,
             COUNT(CASE WHEN rr.position IS NOT NULL THEN 1 END) as finishedRaces,

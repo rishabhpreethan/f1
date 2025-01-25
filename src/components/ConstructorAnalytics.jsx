@@ -483,9 +483,9 @@ function ConstructorAnalytics() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{constructorStats.stats.total_points}</div>
+              <div className="text-2xl font-bold">{constructorStats.stats.totalPoints}</div>
               <p className="text-xs text-muted-foreground">
-                Championship points
+                Points in {selectedYear}
               </p>
             </CardContent>
           </Card>
@@ -498,7 +498,7 @@ function ConstructorAnalytics() {
             <CardContent>
               <div className="text-2xl font-bold">{constructorStats.stats.wins}</div>
               <p className="text-xs text-muted-foreground">
-                Total victories
+                Wins in {selectedYear}
               </p>
             </CardContent>
           </Card>
@@ -509,9 +509,9 @@ function ConstructorAnalytics() {
               <Timer className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{constructorStats.stats.sprint_wins}</div>
+              <div className="text-2xl font-bold">{constructorStats.stats.sprintWins}</div>
               <p className="text-xs text-muted-foreground">
-                Sprint race victories
+                Sprint wins in {selectedYear}
               </p>
             </CardContent>
           </Card>

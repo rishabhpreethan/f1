@@ -77,6 +77,24 @@ CREATE TABLE IF NOT EXISTS qualifying_results (
     FOREIGN KEY (constructor_id) REFERENCES constructors(constructor_id)
 );
 
+CREATE TABLE IF NOT EXISTS sprint_results (
+    sprint_result_id INTEGER PRIMARY KEY,
+    race_id INTEGER,
+    driver_id TEXT,
+    constructor_id TEXT,
+    position INTEGER,
+    grid INTEGER,
+    points INTEGER,
+    laps INTEGER,
+    status TEXT,
+    time TEXT,
+    fastest_lap INTEGER,
+    fastest_lap_time TEXT,
+    FOREIGN KEY (race_id) REFERENCES races(race_id),
+    FOREIGN KEY (driver_id) REFERENCES drivers(driver_id),
+    FOREIGN KEY (constructor_id) REFERENCES constructors(constructor_id)
+);
+
 CREATE TABLE IF NOT EXISTS driver_standings (
     standing_id INTEGER PRIMARY KEY,
     race_id INTEGER,
@@ -125,4 +143,13 @@ CREATE TABLE IF NOT EXISTS pit_stops (
     duration TEXT,
     FOREIGN KEY (race_id) REFERENCES races(race_id),
     FOREIGN KEY (driver_id) REFERENCES drivers(driver_id)
+);
+
+-- Users table for authentication
+CREATE TABLE IF NOT EXISTS users (
+    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

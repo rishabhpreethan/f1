@@ -108,11 +108,14 @@ const CustomDot = (props) => {
 
 function ConstructorAnalytics() {
   const [selectedConstructor, setSelectedConstructor] = useState(null);
+  const [selectedYear, setSelectedYear] = useState(null);
   const [constructors, setConstructors] = useState([]);
+  const [years, setYears] = useState([]);
+  const [availableConstructors, setAvailableConstructors] = useState([]);
   const [constructorStats, setConstructorStats] = useState(null);
   const [constructorProfile, setConstructorProfile] = useState(null);
   const [constructorDrivers, setConstructorDrivers] = useState([]);
-  const [driverPointsData, setDriverPointsData] = useState(null);
+  const [driverPointsData, setDriverPointsData] = useState({ drivers: [], data: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showResults, setShowResults] = useState(false);
@@ -123,7 +126,51 @@ function ConstructorAnalytics() {
   const resultsRef = useRef(null);
   const resultsButtonRef = useRef(null);
 
-  // Fetch constructors for dropdown
+  // Process results data
+  const processResults = (data, type) => {
+    // Group results by round
+    const groupedResults = data.reduce((acc, curr) => {
+      const existingRound = acc.find(r => r.round === curr.round);
+      if (existingRound) {
+        existingRound.drivers.push({
+          code: curr.driverName.split(' ')[0], // Using first name as code for now
+          position: curr.position,
+          grid: curr.grid,
+          points: curr.points,
+          status: curr.status,
+          time: curr.time,
+          q1: curr.q1,
+          q2: curr.q2,
+          q3: curr.q3
+        });
+      } else {
+        acc.push({
+          round: curr.round,
+          race_name: curr.raceName,
+          drivers: [{
+            code: curr.driverName.split(' ')[0], // Using first name as code for now
+            position: curr.position,
+            grid: curr.grid,
+            points: curr.points,
+            status: curr.status,
+            time: curr.time,
+            q1: curr.q1,
+            q2: curr.q2,
+            q3: curr.q3
+          }]
+        });
+      }
+      return acc;
+    }, []);
+
+    // Sort drivers within each round by position
+    return groupedResults.map(round => ({
+      ...round,
+      drivers: round.drivers.sort((a, b) => (a.position || 999) - (b.position || 999))
+    }));
+  };
+
+  // Fetch years and initial constructors
   useEffect(() => {
     console.log('Fetching constructors...');
     setLoading(true);
@@ -136,42 +183,75 @@ function ConstructorAnalytics() {
       })
       .then(data => {
         console.log('Received constructors:', data);
-        setConstructors(data);
-        if (data.length > 0) {
-          setSelectedConstructor(data[0].constructorId);
+        setConstructors(data.constructors);
+        setYears(data.years);
+        if (data.years.length > 0) {
+          setSelectedYear(data.years[0]);
         }
         setLoading(false);
       })
       .catch(error => {
-        console.error('Error fetching constructors:', error);
-        setError('Failed to load constructors. Please try again later.');
+        console.error('Error:', error);
+        setError('Failed to fetch constructors');
         setLoading(false);
       });
   }, []);
 
-  // Fetch constructor stats and profile when selection changes
+  // Update available constructors when year changes
   useEffect(() => {
-    if (selectedConstructor) {
-      console.log('Fetching data for constructor:', selectedConstructor);
+    if (selectedYear) {
+      fetch(`http://localhost:3001/api/constructors?year=${selectedYear}`)
+        .then(res => res.json())
+        .then(data => {
+          setAvailableConstructors(data.constructors);
+          // If current selected constructor is not available in this year, reset it
+          if (selectedConstructor && !data.constructors.find(c => c.constructor_id === selectedConstructor)) {
+            setSelectedConstructor(null);
+          }
+          // If no constructor is selected and we have constructors available, select the first one
+          if (!selectedConstructor && data.constructors.length > 0) {
+            setSelectedConstructor(data.constructors[0].constructor_id);
+          }
+        })
+        .catch(error => console.error('Error fetching constructors for year:', error));
+    }
+  }, [selectedYear]);
+
+  // Fetch constructor data
+  useEffect(() => {
+    if (selectedConstructor && selectedYear) {
+      console.log('Fetching data for constructor:', selectedConstructor, 'and year:', selectedYear);
       setLoading(true);
       setError(null);
 
       Promise.all([
-        fetch(`http://localhost:3001/api/constructor-stats/${selectedConstructor}`),
+        fetch(`http://localhost:3001/api/constructor-stats/${selectedConstructor}?year=${selectedYear}`),
         fetch(`http://localhost:3001/api/constructor-profile/${selectedConstructor}`),
-        fetch(`http://localhost:3001/api/constructor-drivers/${selectedConstructor}`),
-        fetch(`http://localhost:3001/api/constructor-driver-points/${selectedConstructor}`)
+        fetch(`http://localhost:3001/api/constructor-drivers/${selectedConstructor}?year=${selectedYear}`),
+        fetch(`http://localhost:3001/api/constructor-driver-points/${selectedConstructor}?year=${selectedYear}`),
+        fetch(`http://localhost:3001/api/constructor-race-results/${selectedConstructor}?year=${selectedYear}`),
+        fetch(`http://localhost:3001/api/constructor-qualifying-results/${selectedConstructor}?year=${selectedYear}`),
+        fetch(`http://localhost:3001/api/constructor-sprint-results/${selectedConstructor}?year=${selectedYear}`)
       ])
-        .then(([statsRes, profileRes, driversRes, pointsRes]) => Promise.all([statsRes.json(), profileRes.json(), driversRes.json(), pointsRes.json()]))
-        .then(([statsData, profileData, driversData, pointsData]) => {
-          console.log('Received stats:', statsData);
-          console.log('Received profile:', profileData);
-          console.log('Received drivers:', driversData);
-          console.log('Received points data:', pointsData);
+        .then(([statsRes, profileRes, driversRes, pointsRes, raceResultsRes, qualifyingResultsRes, sprintResultsRes]) => 
+          Promise.all([statsRes.json(), profileRes.json(), driversRes.json(), pointsRes.json(), raceResultsRes.json(), qualifyingResultsRes.json(), sprintResultsRes.json()])
+        )
+        .then(([statsData, profileData, driversData, pointsData, raceResultsData, qualifyingResultsData, sprintResultsData]) => {
+          console.log('Received data:', { statsData, profileData, driversData, pointsData, raceResultsData, qualifyingResultsData, sprintResultsData });
+          
           setConstructorStats(statsData);
           setConstructorProfile(profileData);
           setConstructorDrivers(driversData);
-          setDriverPointsData(pointsData);
+          setDriverPointsData({
+            drivers: [...new Set(pointsData.map(d => d.driverName))],
+            data: pointsData
+          });
+          
+          // Process and set results
+          setRaceResults(processResults(raceResultsData));
+          setQualifyingResults(processResults(qualifyingResultsData));
+          setSprintResults(processResults(sprintResultsData));
+          
           setLoading(false);
         })
         .catch(error => {
@@ -180,29 +260,38 @@ function ConstructorAnalytics() {
           setLoading(false);
         });
     }
-  }, [selectedConstructor]);
+  }, [selectedConstructor, selectedYear]);
 
+  // Process driver points data when it's received
   useEffect(() => {
-    if (selectedConstructor) {
-      // Fetch race results
-      fetch(`http://localhost:3001/api/constructor-race-results/${selectedConstructor}`)
+    if (constructorDrivers.length > 0 && selectedYear) {
+      fetch(`http://localhost:3001/api/constructor-driver-points/${selectedConstructor}?year=${selectedYear}`)
         .then(res => res.json())
-        .then(data => setRaceResults(data))
-        .catch(error => console.error('Error fetching race results:', error));
-
-      // Fetch qualifying results
-      fetch(`http://localhost:3001/api/constructor-qualifying-results/${selectedConstructor}`)
-        .then(res => res.json())
-        .then(data => setQualifyingResults(data))
-        .catch(error => console.error('Error fetching qualifying results:', error));
-
-      // Fetch sprint results
-      fetch(`http://localhost:3001/api/constructor-sprint-results/${selectedConstructor}`)
-        .then(res => res.json())
-        .then(data => setSprintResults(data))
-        .catch(error => console.error('Error fetching sprint results:', error));
+        .then(data => {
+          // Process the data to get unique drivers and their points per race
+          const drivers = [...new Set(data.map(d => d.driverName))];
+          const processedData = data.reduce((acc, curr) => {
+            const existingRace = acc.find(r => r.round === curr.round);
+            if (existingRace) {
+              existingRace[curr.driverName] = curr.points;
+            } else {
+              acc.push({
+                round: curr.round,
+                raceName: curr.raceName,
+                [curr.driverName]: curr.points
+              });
+            }
+            return acc;
+          }, []);
+          
+          setDriverPointsData({
+            drivers,
+            data: processedData
+          });
+        })
+        .catch(error => console.error('Error fetching driver points:', error));
     }
-  }, [selectedConstructor]);
+  }, [constructorDrivers, selectedConstructor, selectedYear]);
 
   const toggleResults = () => {
     setShowResults(!showResults);
@@ -224,30 +313,58 @@ function ConstructorAnalytics() {
 
   return (
     <div className="space-y-8 bg-white">
-      {/* Constructor Selection */}
-      <div className="flex items-center justify-between space-y-2">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Constructor Analytics</h2>
-          <p className="text-muted-foreground">
-            Detailed performance analysis for Formula 1 constructors
-          </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Select value={selectedConstructor} onValueChange={setSelectedConstructor}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select Constructor" />
-            </SelectTrigger>
-            <SelectContent>
-              {constructors.map(constructor => (
-                <SelectItem 
-                  key={constructor.constructorId} 
-                  value={constructor.constructorId}
-                >
-                  {constructor.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+        <h2 className="text-3xl font-bold tracking-tight">Constructor Analytics</h2>
+        
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="w-48">
+            <Select
+              value={selectedYear?.toString()}
+              onValueChange={(value) => {
+                setSelectedYear(parseInt(value));
+                setShowResults(true);
+                if (resultsRef.current) {
+                  resultsRef.current.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a year" />
+              </SelectTrigger>
+              <SelectContent>
+                {years.map((year) => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-48">
+            <Select
+              value={selectedConstructor}
+              onValueChange={(value) => {
+                setSelectedConstructor(value);
+                setShowResults(true);
+                if (resultsRef.current) {
+                  resultsRef.current.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a constructor" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableConstructors.map((constructor) => (
+                  <SelectItem key={constructor.constructor_id} value={constructor.constructor_id}>
+                    {constructor.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -492,7 +609,7 @@ function ConstructorAnalytics() {
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
-                    data={driverPointsData.pointsData}
+                    data={driverPointsData.data}
                     margin={{
                       top: 5,
                       right: 30,

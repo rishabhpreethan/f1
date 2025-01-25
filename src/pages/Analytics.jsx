@@ -121,7 +121,10 @@ const PositionDot = (props) => {
 
 function Analytics() {
   const [selectedDriver, setSelectedDriver] = useState(null);
+  const [selectedYear, setSelectedYear] = useState(null);
   const [drivers, setDrivers] = useState([]);
+  const [years, setYears] = useState([]);
+  const [availableDrivers, setAvailableDrivers] = useState([]);
   const [driverStats, setDriverStats] = useState(null);
   const [driverProfile, setDriverProfile] = useState(null);
   const [qualifyingResults, setQualifyingResults] = useState([]);
@@ -166,28 +169,49 @@ function Analytics() {
     return countryMap[nationality] || nationality?.toLowerCase()?.slice(0, 2);
   };
 
-  // Fetch drivers for dropdown
+  // Fetch years and initial drivers
   useEffect(() => {
     fetch('http://localhost:3001/api/drivers')
       .then(res => res.json())
       .then(data => {
-        setDrivers(data);
-        if (data.length > 0) {
-          setSelectedDriver(data[0].driverId);
+        setYears(data.years);
+        setDrivers(data.drivers);
+        if (data.years.length > 0) {
+          setSelectedYear(data.years[0]);
         }
       })
-      .catch(error => console.error('Error fetching drivers:', error));
+      .catch(error => console.error('Error fetching data:', error));
   }, []);
+
+  // Update available drivers when year changes
+  useEffect(() => {
+    if (selectedYear) {
+      fetch(`http://localhost:3001/api/drivers?year=${selectedYear}`)
+        .then(res => res.json())
+        .then(data => {
+          setAvailableDrivers(data.drivers);
+          // If current selected driver is not available in this year, reset it
+          if (selectedDriver && !data.drivers.find(d => d.driver_id === selectedDriver)) {
+            setSelectedDriver(null);
+          }
+          // If no driver is selected and we have drivers available, select the first one
+          if (!selectedDriver && data.drivers.length > 0) {
+            setSelectedDriver(data.drivers[0].driver_id);
+          }
+        })
+        .catch(error => console.error('Error fetching drivers for year:', error));
+    }
+  }, [selectedYear]);
 
   // Fetch driver stats when selection changes
   useEffect(() => {
-    if (selectedDriver) {
+    if (selectedDriver && selectedYear) {
       setLoading(true);
       Promise.all([
-        fetch(`http://localhost:3001/api/driver-stats/${selectedDriver}`),
-        fetch(`http://localhost:3001/api/qualifying-results/${selectedDriver}`),
-        fetch(`http://localhost:3001/api/race-results/${selectedDriver}`),
-        fetch(`http://localhost:3001/api/sprint-results/${selectedDriver}`),
+        fetch(`http://localhost:3001/api/driver-stats/${selectedDriver}?year=${selectedYear}`),
+        fetch(`http://localhost:3001/api/qualifying-results/${selectedDriver}?year=${selectedYear}`),
+        fetch(`http://localhost:3001/api/race-results/${selectedDriver}?year=${selectedYear}`),
+        fetch(`http://localhost:3001/api/sprint-results/${selectedDriver}?year=${selectedYear}`),
         fetch(`http://localhost:3001/api/driver-profile/${selectedDriver}`)
       ])
         .then(async ([statsRes, qualifyingRes, raceRes, sprintRes, profileRes]) => {
@@ -304,9 +328,9 @@ function Analytics() {
           setSprintResults([]);
         });
     }
-  }, [selectedDriver]);
+  }, [selectedDriver, selectedYear]);
 
-  const selectedDriverName = drivers.find(d => d.driverId === selectedDriver)?.name;
+  const selectedDriverName = availableDrivers.find(d => d.driver_id === selectedDriver)?.name;
 
   // Calculate overview stats
   const totalPoints = driverStats?.pointsProgression.reduce((sum, item) => sum + item.points, 0) || 0;
@@ -344,20 +368,53 @@ function Analytics() {
             </p>
           </div>
           <div className="flex items-center space-x-2">
-            <Select value={selectedDriver} onValueChange={setSelectedDriver}>
-              <SelectTrigger className="w-[200px] bg-transparent text-white border-white">
-                <SelectValue placeholder="Select Driver">
-                  {selectedDriverName}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="bg-zinc-900 text-white max-h-[200px] overflow-y-auto">
-                {drivers.map(driver => (
-                  <SelectItem key={driver.driverId} value={driver.driverId} className="hover:bg-zinc-800 focus:bg-zinc-800">
-                    {driver.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-full md:w-1/3">
+              <Select
+                value={selectedYear?.toString()}
+                onValueChange={(value) => {
+                  setSelectedYear(parseInt(value));
+                  setShowResults(true);
+                  if (resultsRef.current) {
+                    resultsRef.current.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="w-full md:w-1/3">
+              <Select
+                value={selectedDriver}
+                onValueChange={(value) => {
+                  setSelectedDriver(value);
+                  setShowResults(true);
+                  if (resultsRef.current) {
+                    resultsRef.current.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a driver" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableDrivers.map((driver) => (
+                    <SelectItem key={driver.driver_id} value={driver.driver_id}>
+                      {driver.forename} {driver.surname}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -679,7 +736,7 @@ function Analytics() {
                           />
                           {driverStats.qualifyingVsRace?.map((entry, index) => (
                             <Cell
-                              key={`cell-${index}`}
+                              key={`${entry.round}-${entry.raceName}`}
                               fill={entry.positions_gained > 0 ? '#22c55e' : '#ef4444'}
                             />
                           ))}
@@ -916,7 +973,7 @@ function Analytics() {
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {raceResults.map((result, index) => (
-                              <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <tr key={`${result.round}-${result.race_name}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
@@ -974,7 +1031,7 @@ function Analytics() {
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {qualifyingResults.map((result, index) => (
-                              <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <tr key={`${result.round}-${result.race_name}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
@@ -1007,7 +1064,7 @@ function Analytics() {
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {sprintResults.map((result, index) => (
-                              <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <tr key={`${result.round}-${result.race_name}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">R{result.round}</td>
                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{result.race_name}</td>
                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">

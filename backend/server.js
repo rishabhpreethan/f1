@@ -404,9 +404,13 @@ app.get('/api/qualifying-results/:driverId', async (req, res) => {
 // Get race results for a driver
 app.get('/api/race-results/:driverId', async (req, res) => {
   const { driverId } = req.params;
+  const { year } = req.query;
   const db = new sqlite3.Database('./backend/sqlite.db');
 
   try {
+    const yearFilter = year ? 'AND s.year = ?' : '';
+    const params = year ? [driverId, year] : [driverId];
+
     const query = `
       WITH RaceFastestLaps AS (
         SELECT 
@@ -433,13 +437,14 @@ app.get('/api/race-results/:driverId', async (req, res) => {
         c.name as constructor_name
       FROM race_results rr
       JOIN races r ON rr.race_id = r.race_id
+      JOIN seasons s ON r.season_id = s.season_id
       JOIN constructors c ON rr.constructor_id = c.constructor_id
       LEFT JOIN RaceFastestLaps rfl ON rr.race_id = rfl.race_id
-      WHERE rr.driver_id = ?
+      WHERE rr.driver_id = ? ${yearFilter}
       ORDER BY r.round
     `;
 
-    db.all(query, [driverId], (err, rows) => {
+    db.all(query, params, (err, rows) => {
       if (err) {
         console.error('Error fetching race results:', err);
         res.status(500).json({ error: 'Failed to fetch race results' });
@@ -458,9 +463,13 @@ app.get('/api/race-results/:driverId', async (req, res) => {
 // Get sprint results for a driver
 app.get('/api/sprint-results/:driverId', async (req, res) => {
   const { driverId } = req.params;
+  const { year } = req.query;
   const db = new sqlite3.Database('./backend/sqlite.db');
 
   try {
+    const yearFilter = year ? 'AND s.year = ?' : '';
+    const params = year ? [driverId, year] : [driverId];
+
     const query = `
       SELECT 
         r.round,
@@ -470,13 +479,14 @@ app.get('/api/sprint-results/:driverId', async (req, res) => {
         c.name as constructor_name
       FROM sprint_results sr
       JOIN races r ON sr.race_id = r.race_id
+      JOIN seasons s ON r.season_id = s.season_id
       JOIN race_results rr ON sr.race_id = rr.race_id AND sr.driver_id = rr.driver_id
       JOIN constructors c ON rr.constructor_id = c.constructor_id
-      WHERE sr.driver_id = ?
+      WHERE sr.driver_id = ? ${yearFilter}
       ORDER BY r.round
     `;
 
-    db.all(query, [driverId], (err, rows) => {
+    db.all(query, params, (err, rows) => {
       if (err) {
         console.error('Error fetching sprint results:', err);
         res.status(500).json({ error: 'Failed to fetch sprint results' });
@@ -487,8 +497,6 @@ app.get('/api/sprint-results/:driverId', async (req, res) => {
   } catch (error) {
     console.error('Server error in /api/sprint-results:', error);
     res.status(500).json({ error: 'Internal server error' });
-  } finally {
-    db.close();
   }
 });
 
@@ -505,24 +513,46 @@ app.get('/api/constructor-stats/:constructorId', async (req, res) => {
     const getPoints = () => {
       return new Promise((resolve, reject) => {
         const yearFilter = year ? 'AND s.year = ?' : '';
-        const params = [constructorId, constructorId];  
+        const params = [constructorId];
         if (year) {
-          params.push(year);  
+          params.push(year);
         }
 
         db.all(`
+          WITH RaceAndSprintPoints AS (
+            SELECT 
+              r.round,
+              r.name as raceName,
+              COALESCE(SUM(rr.points), 0) as race_points,
+              COALESCE(SUM(sr.points), 0) as sprint_points,
+              GROUP_CONCAT(rr.points) as driver_race_points
+            FROM races r
+            JOIN seasons s ON r.season_id = s.season_id
+            LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.constructor_id = ?
+            LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.driver_id = rr.driver_id
+            WHERE 1=1 ${yearFilter}
+            GROUP BY r.round, r.name
+            ORDER BY r.round
+          ),
+          CumulativePoints AS (
+            SELECT 
+              round,
+              raceName,
+              race_points,
+              sprint_points,
+              driver_race_points,
+              SUM(race_points + sprint_points) OVER (ORDER BY round) as cumulative_points
+            FROM RaceAndSprintPoints
+          )
           SELECT 
-            r.round,
-            r.name as raceName,
-            COALESCE(rr.points, 0) as race_points,
-            COALESCE(sr.points, 0) as sprint_points,
-            COALESCE(rr.points, 0) + COALESCE(sr.points, 0) as points
-          FROM races r
-          JOIN seasons s ON r.season_id = s.season_id
-          LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.constructor_id = ?
-          LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.constructor_id = ?
-          WHERE 1=1 ${yearFilter}
-          ORDER BY s.year, r.round
+            round,
+            raceName,
+            race_points,
+            sprint_points,
+            driver_race_points,
+            cumulative_points as points
+          FROM CumulativePoints
+          ORDER BY round
         `, params, (err, rows) => {
           if (err) reject(err);
           resolve(rows);
@@ -534,12 +564,27 @@ app.get('/api/constructor-stats/:constructorId', async (req, res) => {
     const getStats = () => {
       return new Promise((resolve, reject) => {
         const yearFilter = year ? 'AND s.year = ?' : '';
-        const params = [constructorId, constructorId];  
+        const params = [constructorId];
         if (year) {
-          params.push(year);  
+          params.push(year);
         }
 
         db.get(`
+          WITH RacePoints AS (
+            SELECT COALESCE(SUM(rr.points), 0) as race_points
+            FROM race_results rr
+            JOIN races r ON rr.race_id = r.race_id
+            JOIN seasons s ON r.season_id = s.season_id
+            WHERE rr.constructor_id = ? ${yearFilter}
+          ),
+          SprintPoints AS (
+            SELECT COALESCE(SUM(sr.points), 0) as sprint_points
+            FROM sprint_results sr
+            JOIN races r ON sr.race_id = r.race_id
+            JOIN seasons s ON r.season_id = s.season_id
+            JOIN race_results rr ON sr.race_id = rr.race_id AND sr.driver_id = rr.driver_id
+            WHERE rr.constructor_id = ? ${yearFilter}
+          )
           SELECT 
             COUNT(DISTINCT r.race_id) as totalRaces,
             COUNT(CASE WHEN rr.position = 1 THEN 1 END) as wins,
@@ -548,13 +593,13 @@ app.get('/api/constructor-stats/:constructorId', async (req, res) => {
             COUNT(CASE WHEN rr.position <= 10 THEN 1 END) as pointFinishes,
             COUNT(CASE WHEN rr.position IS NOT NULL THEN 1 END) as finishedRaces,
             ROUND(AVG(CASE WHEN rr.position IS NOT NULL THEN rr.position END), 2) as avgFinishPosition,
-            SUM(COALESCE(rr.points, 0) + COALESCE(sr.points, 0)) as totalPoints
+            (SELECT race_points + sprint_points FROM RacePoints, SprintPoints) as totalPoints
           FROM races r
           JOIN seasons s ON r.season_id = s.season_id
           LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.constructor_id = ?
-          LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.constructor_id = ?
+          LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.driver_id = rr.driver_id
           WHERE 1=1 ${yearFilter}
-        `, params, (err, row) => {
+        `, [...params, ...params, ...params], (err, row) => {
           if (err) reject(err);
           resolve(row);
         });

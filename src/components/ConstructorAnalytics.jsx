@@ -66,10 +66,18 @@ const getCountryCode = (nationality) => {
 const CustomDot = (props) => {
   const { cx, cy, payload } = props;
 
-  // Show trophy if any driver scored 25 or more points
-  const driverPoints = payload.driver_points?.split(',').map(Number) || [];
-  if (driverPoints.some(points => points >= 25)) {
+  // Get individual driver points from the comma-separated string
+  const driverPoints = payload.driver_race_points?.split(',').map(Number) || [];
+  
+  // Check if any driver scored 26 points (win + fastest lap) or 25 points (just win)
+  const hasPurpleTrophy = driverPoints.some(points => points === 26);
+  const hasGoldTrophy = driverPoints.some(points => points === 25);
+
+  if (hasPurpleTrophy || hasGoldTrophy) {
     const trophyOffset = cy < 30 ? 15 : -15;
+    // Purple trophy for 26 points (win + fastest lap), gold for 25 points (just win)
+    const trophyColor = hasPurpleTrophy ? "#9333ea" : "#FFD700";
+    
     return (
       <>
         <circle 
@@ -85,7 +93,7 @@ const CustomDot = (props) => {
           y={cy + trophyOffset} 
           width={10} 
           height={10} 
-          fill="#FFD700"
+          fill={trophyColor}
           viewBox="0 0 16 16"
         >
           <path d="M2.5.5A.5.5 0 0 1 3 0h10a.5.5 0 0 1 .5.5c0 .538-.012 1.05-.034 1.536a3 3 0 1 1-1.133 5.89c-.79 1.865-1.878 2.777-2.833 3.011v2.173l1.425.356c.194.048.377.135.537.255L13.3 15.1a.5.5 0 0 1-.3.9H3a.5.5 0 0 1-.3-.9l1.838-1.379c.16-.12.343-.207.537-.255L6.5 13.11v-2.173c-.955-.234-2.043-1.146-2.833-3.012a3 3 0 1 1-1.132-5.89A33.076 33.076 0 0 1 2.5.5zm.099 2.54a2 2 0 0 0 .72 3.935c-.333-1.05-.588-2.346-.72-3.935zm10.083 3.935a2 2 0 0 0 .72-3.935c-.133 1.59-.388 2.885-.72 3.935z"/>
@@ -562,19 +570,19 @@ function ConstructorAnalytics() {
                                 <div className="flex items-center gap-2">
                                   <div className="h-2.5 w-2.5 rounded-[2px] bg-[#e00400]" />
                                   <span className="text-xs">Race Points</span>
-                                  <span className="ml-auto text-xs font-mono">{data.racePoints}</span>
+                                  <span className="ml-auto text-xs font-mono">{data.race_points}</span>
                                 </div>
-                                {data.sprintPoints > 0 && (
+                                {data.sprint_points > 0 && (
                                   <div className="flex items-center gap-2">
                                     <div className="h-2.5 w-2.5 rounded-[2px] bg-[#9333ea]" />
                                     <span className="text-xs">Sprint Points</span>
-                                    <span className="ml-auto text-xs font-mono">{data.sprintPoints}</span>
+                                    <span className="ml-auto text-xs font-mono">{data.sprint_points}</span>
                                   </div>
                                 )}
                                 <div className="flex items-center gap-2 border-t border-white/10 mt-2 pt-2">
                                   <div className="h-2.5 w-2.5 rounded-[2px] bg-[#22c55e]" />
                                   <span className="text-xs">Total Points</span>
-                                  <span className="ml-auto text-xs font-mono">{data.cumulativePoints}</span>
+                                  <span className="ml-auto text-xs font-mono">{data.points}</span>
                                 </div>
                               </div>
                             </div>
@@ -585,11 +593,11 @@ function ConstructorAnalytics() {
                     />
                     <Line
                       type="monotone"
-                      dataKey="cumulativePoints"
+                      dataKey="points"
                       stroke="#e00400"
                       strokeWidth={2}
                       dot={<CustomDot />}
-                      name="Cumulative Points"
+                      name="Points"
                     />
                   </LineChart>
                 </ResponsiveContainer>

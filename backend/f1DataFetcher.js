@@ -1,5 +1,4 @@
 import sqlite3 from 'sqlite3';
-import axios from 'axios';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
@@ -9,21 +8,23 @@ const __dirname = dirname(__filename);
 
 const DB_PATH = join(__dirname, 'sqlite.db');
 const ERGAST_BASE_URL = 'http://ergast.com/api/f1';
-const SEASON = '2024';
+const YEARS = ['2020', '2021', '2022', '2023', '2024'];
 
 // Create database connection
 const db = new sqlite3.Database(DB_PATH);
 
-// Helper function to make API requests with rate limiting
+// Helper function to fetch data with delay
 const fetchWithDelay = async (url) => {
     try {
-        console.log(`🌐 Fetching data from: ${url}`);
-        const response = await axios.get(`${url}.json`);
+        const response = await fetch(url + '.json');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
         await new Promise(resolve => setTimeout(resolve, 100)); // Rate limiting
-        console.log(`✅ Successfully fetched data from: ${url}`);
-        return response.data.MRData;
+        return data.MRData;
     } catch (error) {
-        console.error(`❌ Error fetching ${url}:`, error.message);
+        console.error(`Error fetching data from ${url}:`, error);
         return null;
     }
 };
@@ -33,137 +34,173 @@ const initializeDatabase = async () => {
     const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
     return new Promise((resolve, reject) => {
         db.exec(schema, (err) => {
-            if (err) reject(err);
-            else resolve();
+            if (err) {
+                console.error('Error initializing database:', err);
+                reject(err);
+            } else {
+                console.log('✅ Database initialized successfully');
+                resolve();
+            }
         });
     });
 };
 
 // Fetch and store season data
 const fetchSeasonData = async () => {
-    console.log(`\n📅 Fetching season data for ${SEASON}...`);
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}`);
-    if (!data) return;
+    for (const year of YEARS) {
+        console.log(`\n📅 Fetching season data for ${year}...`);
+        const url = `${ERGAST_BASE_URL}/${year}`;
+        const data = await fetchWithDelay(url);
+        if (!data) continue;
 
-    const stmt = db.prepare('INSERT OR REPLACE INTO seasons (year, url) VALUES (?, ?)');
-    stmt.run(SEASON, `http://ergast.com/api/f1/${SEASON}`);
-    stmt.finalize();
-    console.log(`✅ Season data stored successfully`);
+        const stmt = db.prepare('INSERT OR REPLACE INTO seasons (year, url) VALUES (?, ?)');
+        stmt.run(year, `${ERGAST_BASE_URL}/${year}`);
+        stmt.finalize();
+        console.log(`✅ Season data stored for ${year}`);
+    }
 };
 
 // Fetch and store race schedule
 const fetchRaceSchedule = async () => {
-    console.log(`\n🏁 Fetching race schedule for ${SEASON}...`);
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}`);
-    if (!data?.RaceTable?.Races) return;
+    for (const year of YEARS) {
+        console.log(`\n🏁 Fetching race schedule for ${year}...`);
+        const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}`);
+        if (!data?.RaceTable?.Races) continue;
 
-    const stmt = db.prepare(`
-        INSERT OR REPLACE INTO races (season_id, round, name, date, time, url)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `);
+        const seasonId = await new Promise(resolve => {
+            db.get('SELECT season_id FROM seasons WHERE year = ?', [year], (err, row) => {
+                resolve(row ? row.season_id : null);
+            });
+        });
 
-    data.RaceTable.Races.forEach(race => {
-        console.log(`📍 Processing race: ${race.raceName}`);
-        stmt.run(
-            SEASON,
-            race.round,
-            race.raceName,
-            race.date,
-            race.time,
-            race.url
-        );
-    });
+        if (!seasonId) continue;
 
-    stmt.finalize();
-    console.log(`✅ Race schedule stored successfully`);
+        const stmt = db.prepare(`
+            INSERT OR REPLACE INTO races (season_id, round, name, date, time, url)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `);
+
+        data.RaceTable.Races.forEach(race => {
+            console.log(`📍 Processing race: ${race.raceName}`);
+            stmt.run(
+                seasonId,
+                race.round,
+                race.raceName,
+                race.date,
+                race.time,
+                race.url
+            );
+        });
+
+        stmt.finalize();
+        console.log(`✅ Race schedule stored for ${year}`);
+    }
 };
 
 // Fetch and store circuits
 const fetchCircuits = async () => {
-    console.log(`\n🏎 Fetching circuits for ${SEASON}...`);
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}/circuits`);
-    if (!data?.CircuitTable?.Circuits) return;
+    for (const year of YEARS) {
+        console.log(`\n🏎 Fetching circuits for ${year}...`);
+        const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}/circuits`);
+        if (!data?.CircuitTable?.Circuits) continue;
 
-    const stmt = db.prepare(`
-        INSERT OR REPLACE INTO circuits (circuit_id, name, location, country, lat, lng, url)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+        const stmt = db.prepare(`
+            INSERT OR REPLACE INTO circuits (circuit_id, name, location, country, lat, lng, url)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
 
-    data.CircuitTable.Circuits.forEach(circuit => {
-        console.log(`🏁 Processing circuit: ${circuit.circuitName}`);
-        stmt.run(
-            circuit.circuitId,
-            circuit.circuitName,
-            circuit.Location.locality,
-            circuit.Location.country,
-            circuit.Location.lat,
-            circuit.Location.long,
-            circuit.url
-        );
-    });
+        data.CircuitTable.Circuits.forEach(circuit => {
+            console.log(`🏁 Processing circuit: ${circuit.circuitName}`);
+            stmt.run(
+                circuit.circuitId,
+                circuit.circuitName,
+                circuit.Location.locality,
+                circuit.Location.country,
+                circuit.Location.lat,
+                circuit.Location.long,
+                circuit.url
+            );
+        });
 
-    stmt.finalize();
-    console.log(`✅ Circuits data stored successfully`);
+        stmt.finalize();
+        console.log(`✅ Circuits data stored for ${year}`);
+    }
 };
 
 // Fetch and store drivers
 const fetchDrivers = async () => {
-    console.log(`\n👨‍🏎 Fetching drivers for ${SEASON}...`);
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}/drivers`);
-    if (!data?.DriverTable?.Drivers) return;
+    for (const year of YEARS) {
+        console.log(`\n👨‍🏎 Fetching drivers for ${year}...`);
+        const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}/drivers`);
+        if (!data?.DriverTable?.Drivers) continue;
 
-    const stmt = db.prepare(`
-        INSERT OR REPLACE INTO drivers (driver_id, code, number, forename, surname, dob, nationality, url)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+        const stmt = db.prepare(`
+            INSERT OR REPLACE INTO drivers (driver_id, code, number, forename, surname, dob, nationality, url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
 
-    data.DriverTable.Drivers.forEach(driver => {
-        console.log(`🏎 Processing driver: ${driver.givenName} ${driver.familyName}`);
-        stmt.run(
-            driver.driverId,
-            driver.code,
-            driver.permanentNumber,
-            driver.givenName,
-            driver.familyName,
-            driver.dateOfBirth,
-            driver.nationality,
-            driver.url
-        );
-    });
+        data.DriverTable.Drivers.forEach(driver => {
+            console.log(`🏎 Processing driver: ${driver.givenName} ${driver.familyName}`);
+            stmt.run(
+                driver.driverId,
+                driver.code,
+                driver.permanentNumber,
+                driver.givenName,
+                driver.familyName,
+                driver.dateOfBirth,
+                driver.nationality,
+                driver.url
+            );
+        });
 
-    stmt.finalize();
-    console.log(`✅ Drivers data stored successfully`);
+        stmt.finalize();
+        console.log(`✅ Drivers data stored for ${year}`);
+    }
 };
 
 // Fetch and store constructors
 const fetchConstructors = async () => {
-    console.log(`\n🏭 Fetching constructors for ${SEASON}...`);
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}/constructors`);
-    if (!data?.ConstructorTable?.Constructors) return;
+    for (const year of YEARS) {
+        console.log(`\n🏭 Fetching constructors for ${year}...`);
+        const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}/constructors`);
+        if (!data?.ConstructorTable?.Constructors) continue;
 
-    const stmt = db.prepare(`
-        INSERT OR REPLACE INTO constructors (constructor_id, name, nationality, url)
-        VALUES (?, ?, ?, ?)
-    `);
+        const stmt = db.prepare(`
+            INSERT OR REPLACE INTO constructors (constructor_id, name, nationality, url)
+            VALUES (?, ?, ?, ?)
+        `);
 
-    data.ConstructorTable.Constructors.forEach(constructor => {
-        console.log(`🏢 Processing constructor: ${constructor.name}`);
-        stmt.run(
-            constructor.constructorId,
-            constructor.name,
-            constructor.nationality,
-            constructor.url
+        data.ConstructorTable.Constructors.forEach(constructor => {
+            console.log(`🏢 Processing constructor: ${constructor.name}`);
+            stmt.run(
+                constructor.constructorId,
+                constructor.name,
+                constructor.nationality,
+                constructor.url
+            );
+        });
+
+        stmt.finalize();
+        console.log(`✅ Constructors data stored for ${year}`);
+    }
+};
+
+// Fetch and store race results
+const fetchRaceResults = async (year, round) => {
+    console.log(`\n🏁 Fetching race results for ${year} round ${round}...`);
+    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}/${round}/results`);
+    if (!data?.RaceTable?.Races?.[0]?.Results) return;
+
+    const race = data.RaceTable.Races[0];
+    const raceId = await new Promise(resolve => {
+        db.get(
+            'SELECT race_id FROM races WHERE season_id = (SELECT season_id FROM seasons WHERE year = ?) AND round = ?',
+            [year, round],
+            (err, row) => resolve(row ? row.race_id : null)
         );
     });
 
-    stmt.finalize();
-    console.log(`✅ Constructors data stored successfully`);
-};
-
-// Fetch and store race results after each race
-const fetchRaceResults = async (round) => {
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}/${round}/results`);
-    if (!data?.RaceTable?.Races?.[0]?.Results) return;
+    if (!raceId) return;
 
     const stmt = db.prepare(`
         INSERT OR REPLACE INTO race_results 
@@ -171,9 +208,9 @@ const fetchRaceResults = async (round) => {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    data.RaceTable.Races[0].Results.forEach(result => {
+    race.Results.forEach(result => {
         stmt.run(
-            data.RaceTable.Races[0].round,
+            raceId,
             result.Driver.driverId,
             result.Constructor.constructorId,
             result.grid,
@@ -188,51 +225,116 @@ const fetchRaceResults = async (round) => {
     });
 
     stmt.finalize();
+    console.log(`✅ Race results stored for ${year} round ${round}`);
 };
 
-// Fetch and store qualifying results for each race
-const fetchQualifyingResults = async (round) => {
-    console.log(`\n⏱ Fetching qualifying results for round ${round}...`);
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}/${round}/qualifying`);
+// Fetch and store qualifying results
+const fetchQualifyingResults = async (year, round) => {
+    console.log(`\n⏱ Fetching qualifying results for ${year} round ${round}...`);
+    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}/${round}/qualifying`);
     if (!data?.RaceTable?.Races?.[0]?.QualifyingResults) return;
 
+    const race = data.RaceTable.Races[0];
+    const raceId = await new Promise(resolve => {
+        db.get(
+            'SELECT race_id FROM races WHERE season_id = (SELECT season_id FROM seasons WHERE year = ?) AND round = ?',
+            [year, round],
+            (err, row) => resolve(row ? row.race_id : null)
+        );
+    });
+
+    if (!raceId) return;
+
     const stmt = db.prepare(`
-        INSERT OR REPLACE INTO qualifying_results (race_id, driver_id, constructor_id, position, q1_time, q2_time, q3_time)
+        INSERT OR REPLACE INTO qualifying_results 
+        (race_id, driver_id, constructor_id, position, q1_time, q2_time, q3_time)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    data.RaceTable.Races[0].QualifyingResults.forEach(result => {
-        console.log(`🏁 Processing qualifying result for: ${result.Driver.familyName}`);
+    race.QualifyingResults.forEach(result => {
         stmt.run(
-            round,
+            raceId,
             result.Driver.driverId,
             result.Constructor.constructorId,
             result.position,
-            result.Q1 || null,
-            result.Q2 || null,
-            result.Q3 || null
+            result.Q1,
+            result.Q2,
+            result.Q3
         );
     });
 
     stmt.finalize();
-    console.log(`✅ Qualifying results stored successfully for round ${round}`);
+    console.log(`✅ Qualifying results stored for ${year} round ${round}`);
 };
 
-// Fetch and store driver standings after each race
-const fetchDriverStandings = async (round) => {
-    console.log(`\n📊 Fetching driver standings after round ${round}...`);
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}/${round}/driverStandings`);
-    if (!data?.StandingsTable?.StandingsLists?.[0]?.DriverStandings) return;
+// Fetch and store sprint results
+const fetchSprintResults = async (year, round) => {
+    console.log(`\n🏃 Fetching sprint results for ${year} round ${round}...`);
+    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}/${round}/sprint`);
+    if (!data?.RaceTable?.Races?.[0]?.SprintResults) return;
+
+    const race = data.RaceTable.Races[0];
+    const raceId = await new Promise(resolve => {
+        db.get(
+            'SELECT race_id FROM races WHERE season_id = (SELECT season_id FROM seasons WHERE year = ?) AND round = ?',
+            [year, round],
+            (err, row) => resolve(row ? row.race_id : null)
+        );
+    });
+
+    if (!raceId) return;
 
     const stmt = db.prepare(`
-        INSERT OR REPLACE INTO driver_standings (race_id, driver_id, points, position, wins)
+        INSERT OR REPLACE INTO sprint_results 
+        (race_id, driver_id, constructor_id, position, grid, points, laps, status, time, fastest_lap, fastest_lap_time)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    race.SprintResults.forEach(result => {
+        stmt.run(
+            raceId,
+            result.Driver.driverId,
+            result.Constructor.constructorId,
+            result.position,
+            result.grid,
+            result.points,
+            result.laps,
+            result.status,
+            result.Time?.time,
+            result.FastestLap?.lap,
+            result.FastestLap?.Time?.time
+        );
+    });
+
+    stmt.finalize();
+    console.log(`✅ Sprint results stored for ${year} round ${round}`);
+};
+
+// Fetch and store driver standings
+const fetchDriverStandings = async (year, round) => {
+    console.log(`\n📊 Fetching driver standings for ${year} round ${round}...`);
+    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}/${round}/driverStandings`);
+    if (!data?.StandingsTable?.StandingsLists?.[0]?.DriverStandings) return;
+
+    const raceId = await new Promise(resolve => {
+        db.get(
+            'SELECT race_id FROM races WHERE season_id = (SELECT season_id FROM seasons WHERE year = ?) AND round = ?',
+            [year, round],
+            (err, row) => resolve(row ? row.race_id : null)
+        );
+    });
+
+    if (!raceId) return;
+
+    const stmt = db.prepare(`
+        INSERT OR REPLACE INTO driver_standings 
+        (race_id, driver_id, points, position, wins)
         VALUES (?, ?, ?, ?, ?)
     `);
 
     data.StandingsTable.StandingsLists[0].DriverStandings.forEach(standing => {
-        console.log(`📈 Processing driver standing for: ${standing.Driver.familyName}`);
         stmt.run(
-            round,
+            raceId,
             standing.Driver.driverId,
             standing.points,
             standing.position,
@@ -241,24 +343,34 @@ const fetchDriverStandings = async (round) => {
     });
 
     stmt.finalize();
-    console.log(`✅ Driver standings stored successfully for round ${round}`);
+    console.log(`✅ Driver standings stored for ${year} round ${round}`);
 };
 
-// Fetch and store constructor standings after each race
-const fetchConstructorStandings = async (round) => {
-    console.log(`\n🏆 Fetching constructor standings after round ${round}...`);
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}/${round}/constructorStandings`);
+// Fetch and store constructor standings
+const fetchConstructorStandings = async (year, round) => {
+    console.log(`\n🏆 Fetching constructor standings for ${year} round ${round}...`);
+    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}/${round}/constructorStandings`);
     if (!data?.StandingsTable?.StandingsLists?.[0]?.ConstructorStandings) return;
 
+    const raceId = await new Promise(resolve => {
+        db.get(
+            'SELECT race_id FROM races WHERE season_id = (SELECT season_id FROM seasons WHERE year = ?) AND round = ?',
+            [year, round],
+            (err, row) => resolve(row ? row.race_id : null)
+        );
+    });
+
+    if (!raceId) return;
+
     const stmt = db.prepare(`
-        INSERT OR REPLACE INTO constructor_standings (race_id, constructor_id, points, position, wins)
+        INSERT OR REPLACE INTO constructor_standings 
+        (race_id, constructor_id, points, position, wins)
         VALUES (?, ?, ?, ?, ?)
     `);
 
     data.StandingsTable.StandingsLists[0].ConstructorStandings.forEach(standing => {
-        console.log(`📊 Processing constructor standing for: ${standing.Constructor.name}`);
         stmt.run(
-            round,
+            raceId,
             standing.Constructor.constructorId,
             standing.points,
             standing.position,
@@ -267,25 +379,35 @@ const fetchConstructorStandings = async (round) => {
     });
 
     stmt.finalize();
-    console.log(`✅ Constructor standings stored successfully for round ${round}`);
+    console.log(`✅ Constructor standings stored for ${year} round ${round}`);
 };
 
-// Fetch and store lap times for each race
-const fetchLapTimes = async (round) => {
-    console.log(`\n⏱ Fetching lap times for round ${round}...`);
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}/${round}/laps`);
+// Fetch and store lap times
+const fetchLapTimes = async (year, round) => {
+    console.log(`\n⏱ Fetching lap times for ${year} round ${round}...`);
+    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}/${round}/laps`);
     if (!data?.RaceTable?.Races?.[0]?.Laps) return;
 
+    const raceId = await new Promise(resolve => {
+        db.get(
+            'SELECT race_id FROM races WHERE season_id = (SELECT season_id FROM seasons WHERE year = ?) AND round = ?',
+            [year, round],
+            (err, row) => resolve(row ? row.race_id : null)
+        );
+    });
+
+    if (!raceId) return;
+
     const stmt = db.prepare(`
-        INSERT OR REPLACE INTO lap_times (race_id, driver_id, lap, position, time)
+        INSERT OR REPLACE INTO lap_times 
+        (race_id, driver_id, lap, position, time)
         VALUES (?, ?, ?, ?, ?)
     `);
 
     data.RaceTable.Races[0].Laps.forEach(lap => {
         lap.Timings.forEach(timing => {
-            console.log(`⏱ Processing lap ${lap.number} for driver: ${timing.driverId}`);
             stmt.run(
-                round,
+                raceId,
                 timing.driverId,
                 lap.number,
                 timing.position,
@@ -295,24 +417,34 @@ const fetchLapTimes = async (round) => {
     });
 
     stmt.finalize();
-    console.log(`✅ Lap times stored successfully for round ${round}`);
+    console.log(`✅ Lap times stored for ${year} round ${round}`);
 };
 
-// Fetch and store pit stops for each race
-const fetchPitStops = async (round) => {
-    console.log(`\n🔧 Fetching pit stops for round ${round}...`);
-    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}/${round}/pitstops`);
+// Fetch and store pit stops
+const fetchPitStops = async (year, round) => {
+    console.log(`\n🔧 Fetching pit stops for ${year} round ${round}...`);
+    const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${year}/${round}/pitstops`);
     if (!data?.RaceTable?.Races?.[0]?.PitStops) return;
 
+    const raceId = await new Promise(resolve => {
+        db.get(
+            'SELECT race_id FROM races WHERE season_id = (SELECT season_id FROM seasons WHERE year = ?) AND round = ?',
+            [year, round],
+            (err, row) => resolve(row ? row.race_id : null)
+        );
+    });
+
+    if (!raceId) return;
+
     const stmt = db.prepare(`
-        INSERT OR REPLACE INTO pit_stops (race_id, driver_id, stop, lap, time, duration)
+        INSERT OR REPLACE INTO pit_stops 
+        (race_id, driver_id, stop, lap, time, duration)
         VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     data.RaceTable.Races[0].PitStops.forEach(stop => {
-        console.log(`🔧 Processing pit stop ${stop.stop} for driver: ${stop.driverId}`);
         stmt.run(
-            round,
+            raceId,
             stop.driverId,
             stop.stop,
             stop.lap,
@@ -322,27 +454,16 @@ const fetchPitStops = async (round) => {
     });
 
     stmt.finalize();
-    console.log(`✅ Pit stops stored successfully for round ${round}`);
-};
-
-// Fetch race-specific data for each round
-const fetchRaceData = async (round) => {
-    console.log(`\n🏁 Fetching all data for round ${round}...`);
-    await fetchRaceResults(round);
-    await fetchQualifyingResults(round);
-    await fetchDriverStandings(round);
-    await fetchConstructorStandings(round);
-    await fetchLapTimes(round);
-    await fetchPitStops(round);
-    console.log(`✅ Completed data collection for round ${round}`);
+    console.log(`✅ Pit stops stored for ${year} round ${round}`);
 };
 
 // Main function to orchestrate data fetching
-const fetchAllData = async () => {
+const main = async () => {
     try {
         console.log('🚀 Starting F1 data extraction process...');
-        console.log('📊 Target Season:', SEASON);
+        console.log('📊 Target Years:', YEARS);
         console.log('💾 Database Path:', DB_PATH);
+
         console.log('\n🔧 Initializing database...');
         await initializeDatabase();
 
@@ -355,12 +476,27 @@ const fetchAllData = async () => {
         await fetchDrivers();
         await fetchConstructors();
 
-        // Fetch race-specific data for each round
-        const data = await fetchWithDelay(`${ERGAST_BASE_URL}/${SEASON}`);
-        if (data?.RaceTable?.Races) {
-            for (const race of data.RaceTable.Races) {
-                console.log(`\n🏎 Processing race ${race.round}: ${race.raceName}`);
-                await fetchRaceData(race.round);
+        // Fetch race-specific data for each year and round
+        for (const year of YEARS) {
+            const races = await new Promise(resolve => {
+                db.all(
+                    'SELECT round FROM races WHERE season_id = (SELECT season_id FROM seasons WHERE year = ?) ORDER BY round',
+                    [year],
+                    (err, rows) => resolve(rows || [])
+                );
+            });
+
+            for (const race of races) {
+                console.log(`\n🏎 Processing ${year} round ${race.round}...`);
+                await fetchRaceResults(year, race.round);
+                await fetchQualifyingResults(year, race.round);
+                await fetchSprintResults(year, race.round);
+                await fetchDriverStandings(year, race.round);
+                await fetchConstructorStandings(year, race.round);
+                await fetchLapTimes(year, race.round);
+                await fetchPitStops(year, race.round);
+                // Add a small delay between rounds to avoid rate limiting
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
         }
 
@@ -375,4 +511,4 @@ const fetchAllData = async () => {
 };
 
 // Execute the main function
-fetchAllData();
+main();

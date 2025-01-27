@@ -80,179 +80,208 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Get all drivers
+// Get available drivers with their years
 app.get('/api/drivers', async (req, res) => {
-  try {
-    const db = new sqlite3.Database('./backend/sqlite.db');
-    
-    db.all(`
-      SELECT 
-        driver_id as driverId,
-        forename || ' ' || surname as name
-      FROM drivers
-      ORDER BY surname
-    `, [], (err, rows) => {
-      if (err) {
-        console.error('Error fetching drivers:', err);
-        res.status(500).json({ error: 'Failed to fetch drivers' });
-        return;
-      }
-      res.json(rows);
-    });
-
-    db.close();
-  } catch (error) {
-    console.error('Server error in /api/drivers:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Get driver statistics
-app.get('/api/driver-stats/:driverId', async (req, res) => {
-  const { driverId } = req.params;
-  console.log('Fetching stats for driver:', driverId);
-  
+  const { year } = req.query;
   const db = new sqlite3.Database('./backend/sqlite.db');
 
   try {
-    // Get points progression (including sprint points)
-    const pointsQuery = `
-      SELECT 
-        r.round,
-        r.name as raceName,
-        COALESCE(rr.points, 0) as race_points,
-        COALESCE(sr.points, 0) as sprint_points,
-        COALESCE(rr.points, 0) + COALESCE(sr.points, 0) as points,
-        COALESCE(rr.position, 0) as position
-      FROM races r
-      LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
-      LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.driver_id = ?
-      GROUP BY r.round
-      ORDER BY r.round
-    `;
-
-    // Get race positions
-    const positionsQuery = `
-      SELECT 
-        r.round,
-        r.name as raceName,
-        COALESCE(rr.position, 0) as position
-      FROM races r
-      LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
-      GROUP BY r.round
-      ORDER BY r.round
-    `;
-
-    // Get season stats
-    const statsQuery = `
-      WITH LatestRace AS (
-        SELECT MAX(r.race_id) as race_id
-        FROM races r
-      ),
-      DriverPoints AS (
-        SELECT 
-          d.driver_id,
-          SUM(rr.points) as total_points
-        FROM race_results rr
-        JOIN drivers d ON rr.driver_id = d.driver_id
-        GROUP BY d.driver_id
-      ),
-      DriverStandings AS (
-        SELECT 
-          driver_id,
-          total_points,
-          RANK() OVER (ORDER BY total_points DESC) as championship_position
-        FROM DriverPoints
-      )
-      SELECT 
-        COUNT(CASE WHEN rr.position = 1 THEN 1 END) as wins,
-        COUNT(CASE WHEN rr.position <= 3 THEN 1 END) as podiums,
-        COUNT(CASE WHEN rr.status = 'DNF' THEN 1 END) as dnf,
-        ds.championship_position
-      FROM race_results rr
-      JOIN DriverStandings ds ON rr.driver_id = ds.driver_id
-      WHERE rr.driver_id = ?
-      GROUP BY rr.driver_id;
-    `;
-
-    // Get qualifying vs race positions
-    const qualifyingVsRaceQuery = `
-      SELECT 
-        r.round,
-        r.name as raceName,
-        COALESCE(q.position, 20) as qualifying_position,
-        COALESCE(rr.position, 20) as race_position,
-        COALESCE(rr.position, 20) - COALESCE(q.position, 20) as positions_gained
-      FROM races r
-      LEFT JOIN qualifying_results q ON r.race_id = q.race_id AND q.driver_id = ?
-      LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
-      ORDER BY r.round
-    `;
-
-    // Get teammate comparison data
-    const teammateComparisonQuery = `
-      WITH SelectedDriverConstructor AS (
-        -- Get the constructor for the selected driver
-        SELECT DISTINCT rr.constructor_id
-        FROM race_results rr
-        WHERE rr.driver_id = ?
-        ORDER BY rr.race_id DESC
-        LIMIT 1
-      )
-      SELECT 
-        r.round,
-        r.name as raceName,
-        d.code as driver_code,
-        rr.position
-      FROM races r
+    // First, get all available years
+    db.all(`
+      SELECT DISTINCT s.year
+      FROM seasons s
+      JOIN races r ON s.season_id = r.season_id
       JOIN race_results rr ON r.race_id = rr.race_id
-      JOIN SelectedDriverConstructor sdc ON rr.constructor_id = sdc.constructor_id
-      JOIN drivers d ON rr.driver_id = d.driver_id
-      ORDER BY r.round, rr.position
-    `;
-    
+      ORDER BY s.year DESC
+    `, [], (yearErr, yearRows) => {
+      if (yearErr) {
+        console.error('Error fetching years:', yearErr);
+        res.status(500).json({ error: 'Failed to fetch years' });
+        return;
+      }
+
+      const years = yearRows.map(row => row.year);
+      
+      // Then get drivers, filtered by year if specified
+      const yearFilter = year ? 'AND s.year = ?' : '';
+      const params = year ? [year] : [];
+      
+      db.all(`
+        SELECT DISTINCT 
+          d.driver_id,
+          d.code,
+          d.forename,
+          d.surname,
+          d.nationality,
+          GROUP_CONCAT(DISTINCT s.year) as years
+        FROM drivers d
+        JOIN race_results rr ON d.driver_id = rr.driver_id
+        JOIN races r ON rr.race_id = r.race_id
+        JOIN seasons s ON r.season_id = s.season_id
+        WHERE 1=1 ${yearFilter}
+        GROUP BY d.driver_id
+        ORDER BY d.surname
+      `, params, (err, rows) => {
+        if (err) {
+          console.error('Error fetching drivers:', err);
+          res.status(500).json({ error: 'Failed to fetch drivers' });
+          return;
+        }
+        
+        // Process years into array for each driver
+        const processedRows = rows.map(row => ({
+          ...row,
+          years: row.years.split(',').map(Number).sort((a, b) => b - a)
+        }));
+        
+        res.json({
+          years,
+          drivers: processedRows
+        });
+      });
+    });
+  } catch (error) {
+    console.error('Error fetching drivers:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close((err) => {
+      if (err) {
+        console.error('Error closing database:', err);
+      }
+    });
+  }
+});
+
+// Get driver stats
+app.get('/api/driver-stats/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+  const { year } = req.query;
+  console.log('Fetching stats for driver:', driverId, 'year:', year);
+  
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  const yearFilter = year ? 'AND s.year = ?' : '';
+
+  try {
     // Using promises to handle database queries
     const getPoints = () => {
       return new Promise((resolve, reject) => {
-        db.all(pointsQuery, [driverId, driverId], (err, rows) => {
+        const params = year ? [driverId, driverId, year] : [driverId, driverId];
+        db.all(`
+          SELECT 
+            r.round,
+            r.name as raceName,
+            COALESCE(rr.points, 0) as race_points,
+            COALESCE(sr.points, 0) as sprint_points,
+            COALESCE(rr.points, 0) + COALESCE(sr.points, 0) as points
+          FROM races r
+          JOIN seasons s ON r.season_id = s.season_id
+          LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
+          LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.driver_id = ?
+          WHERE 1=1 ${yearFilter}
+          ORDER BY s.year, r.round
+        `, params, (err, rows) => {
           if (err) reject(err);
-          else resolve(rows);
+          resolve(rows);
         });
       });
     };
 
     const getPositions = () => {
       return new Promise((resolve, reject) => {
-        db.all(positionsQuery, [driverId], (err, rows) => {
+        const params = year ? [driverId, year] : [driverId];
+        db.all(`
+          SELECT 
+            r.round,
+            r.name as raceName,
+            rr.position as position,
+            rr.grid as grid
+          FROM races r
+          JOIN seasons s ON r.season_id = s.season_id
+          LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
+          WHERE 1=1 ${yearFilter}
+          ORDER BY s.year, r.round
+        `, params, (err, rows) => {
           if (err) reject(err);
-          else resolve(rows);
+          resolve(rows);
         });
       });
     };
 
     const getStats = () => {
       return new Promise((resolve, reject) => {
-        db.get(statsQuery, [driverId], (err, row) => {
+        const params = year ? [driverId, driverId, year] : [driverId, driverId];
+        db.get(`
+          SELECT 
+            COUNT(DISTINCT r.race_id) as totalRaces,
+            COUNT(CASE WHEN rr.position = 1 THEN 1 END) as wins,
+            COUNT(CASE WHEN rr.position <= 3 THEN 1 END) as podiums,
+            COUNT(CASE WHEN rr.position <= 10 THEN 1 END) as pointFinishes,
+            COUNT(CASE WHEN rr.position IS NOT NULL THEN 1 END) as finishedRaces,
+            ROUND(AVG(CASE WHEN rr.position IS NOT NULL THEN rr.position END), 2) as avgFinishPosition,
+            SUM(COALESCE(rr.points, 0) + COALESCE(sr.points, 0)) as totalPoints
+          FROM races r
+          JOIN seasons s ON r.season_id = s.season_id
+          LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
+          LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.driver_id = ?
+          WHERE 1=1 ${yearFilter}
+        `, params, (err, row) => {
           if (err) reject(err);
-          else resolve(row);
+          resolve(row);
         });
       });
     };
 
     const getQualifyingVsRace = () => {
       return new Promise((resolve, reject) => {
-        db.all(qualifyingVsRaceQuery, [driverId, driverId], (err, rows) => {
+        const params = year ? [driverId, driverId, year] : [driverId, driverId];
+        db.all(`
+          SELECT 
+            r.round,
+            r.name as raceName,
+            COALESCE(q.position, 20) as qualifying_position,
+            COALESCE(rr.position, 20) as race_position,
+            COALESCE(rr.position, 20) - COALESCE(q.position, 20) as positions_gained
+          FROM races r
+          JOIN seasons s ON r.season_id = s.season_id
+          LEFT JOIN qualifying_results q ON r.race_id = q.race_id AND q.driver_id = ?
+          LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = ?
+          WHERE 1=1 ${yearFilter}
+          ORDER BY s.year, r.round
+        `, params, (err, rows) => {
           if (err) reject(err);
-          else resolve(rows);
+          resolve(rows);
         });
       });
     };
 
     const getTeammateComparison = () => {
       return new Promise((resolve, reject) => {
-        db.all(teammateComparisonQuery, [driverId], (err, rows) => {
+        const params = year ? [driverId, year] : [driverId];
+        db.all(`
+          WITH SelectedDriverConstructor AS (
+            -- Get the constructor for the selected driver
+            SELECT DISTINCT rr.constructor_id
+            FROM race_results rr
+            WHERE rr.driver_id = ?
+            ORDER BY rr.race_id DESC
+            LIMIT 1
+          )
+          SELECT 
+            r.round,
+            r.name as raceName,
+            d.code as driver_code,
+            rr.position
+          FROM races r
+          JOIN seasons s ON r.season_id = s.season_id
+          JOIN race_results rr ON r.race_id = rr.race_id
+          JOIN SelectedDriverConstructor sdc ON rr.constructor_id = sdc.constructor_id
+          JOIN drivers d ON rr.driver_id = d.driver_id
+          WHERE 1=1 ${yearFilter}
+          ORDER BY s.year, r.round
+        `, params, (err, rows) => {
           if (err) reject(err);
-          else resolve(rows);
+          resolve(rows);
         });
       });
     };
@@ -280,7 +309,6 @@ app.get('/api/driver-stats/:driverId', async (req, res) => {
           }
         });
       });
-
   } catch (error) {
     console.error('Server error in /api/driver-stats:', error);
     res.status(500).json({ error: 'Internal server error', details: error.message });
@@ -376,9 +404,13 @@ app.get('/api/qualifying-results/:driverId', async (req, res) => {
 // Get race results for a driver
 app.get('/api/race-results/:driverId', async (req, res) => {
   const { driverId } = req.params;
+  const { year } = req.query;
   const db = new sqlite3.Database('./backend/sqlite.db');
 
   try {
+    const yearFilter = year ? 'AND s.year = ?' : '';
+    const params = year ? [driverId, year] : [driverId];
+
     const query = `
       WITH RaceFastestLaps AS (
         SELECT 
@@ -405,13 +437,14 @@ app.get('/api/race-results/:driverId', async (req, res) => {
         c.name as constructor_name
       FROM race_results rr
       JOIN races r ON rr.race_id = r.race_id
+      JOIN seasons s ON r.season_id = s.season_id
       JOIN constructors c ON rr.constructor_id = c.constructor_id
       LEFT JOIN RaceFastestLaps rfl ON rr.race_id = rfl.race_id
-      WHERE rr.driver_id = ?
+      WHERE rr.driver_id = ? ${yearFilter}
       ORDER BY r.round
     `;
 
-    db.all(query, [driverId], (err, rows) => {
+    db.all(query, params, (err, rows) => {
       if (err) {
         console.error('Error fetching race results:', err);
         res.status(500).json({ error: 'Failed to fetch race results' });
@@ -430,9 +463,13 @@ app.get('/api/race-results/:driverId', async (req, res) => {
 // Get sprint results for a driver
 app.get('/api/sprint-results/:driverId', async (req, res) => {
   const { driverId } = req.params;
+  const { year } = req.query;
   const db = new sqlite3.Database('./backend/sqlite.db');
 
   try {
+    const yearFilter = year ? 'AND s.year = ?' : '';
+    const params = year ? [driverId, year] : [driverId];
+
     const query = `
       SELECT 
         r.round,
@@ -442,13 +479,14 @@ app.get('/api/sprint-results/:driverId', async (req, res) => {
         c.name as constructor_name
       FROM sprint_results sr
       JOIN races r ON sr.race_id = r.race_id
+      JOIN seasons s ON r.season_id = s.season_id
       JOIN race_results rr ON sr.race_id = rr.race_id AND sr.driver_id = rr.driver_id
       JOIN constructors c ON rr.constructor_id = c.constructor_id
-      WHERE sr.driver_id = ?
+      WHERE sr.driver_id = ? ${yearFilter}
       ORDER BY r.round
     `;
 
-    db.all(query, [driverId], (err, rows) => {
+    db.all(query, params, (err, rows) => {
       if (err) {
         console.error('Error fetching sprint results:', err);
         res.status(500).json({ error: 'Failed to fetch sprint results' });
@@ -459,8 +497,440 @@ app.get('/api/sprint-results/:driverId', async (req, res) => {
   } catch (error) {
     console.error('Server error in /api/sprint-results:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get constructor points progression
+app.get('/api/constructor-stats/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const { year } = req.query;
+  console.log('Fetching stats for constructor:', constructorId, 'year:', year);
+  
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    // Get points progression
+    const getPoints = () => {
+      return new Promise((resolve, reject) => {
+        const yearFilter = year ? 'AND s.year = ?' : '';
+        const params = [constructorId];
+        if (year) {
+          params.push(year);
+        }
+
+        db.all(`
+          WITH RaceAndSprintPoints AS (
+            SELECT 
+              r.round,
+              r.name as raceName,
+              COALESCE(SUM(rr.points), 0) as race_points,
+              COALESCE(SUM(sr.points), 0) as sprint_points,
+              GROUP_CONCAT(rr.points) as driver_race_points
+            FROM races r
+            JOIN seasons s ON r.season_id = s.season_id
+            LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.constructor_id = ?
+            LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.driver_id = rr.driver_id
+            WHERE 1=1 ${yearFilter}
+            GROUP BY r.round, r.name
+            ORDER BY r.round
+          ),
+          CumulativePoints AS (
+            SELECT 
+              round,
+              raceName,
+              race_points,
+              sprint_points,
+              driver_race_points,
+              SUM(race_points + sprint_points) OVER (ORDER BY round) as cumulative_points
+            FROM RaceAndSprintPoints
+          )
+          SELECT 
+            round,
+            raceName,
+            race_points,
+            sprint_points,
+            driver_race_points,
+            cumulative_points as points
+          FROM CumulativePoints
+          ORDER BY round
+        `, params, (err, rows) => {
+          if (err) reject(err);
+          resolve(rows);
+        });
+      });
+    };
+
+    // Get season stats
+    const getStats = () => {
+      return new Promise((resolve, reject) => {
+        const yearFilter = year ? 'AND s.year = ?' : '';
+        const params = [constructorId];
+        if (year) {
+          params.push(year);
+        }
+
+        db.get(`
+          WITH RacePoints AS (
+            SELECT COALESCE(SUM(rr.points), 0) as race_points
+            FROM race_results rr
+            JOIN races r ON rr.race_id = r.race_id
+            JOIN seasons s ON r.season_id = s.season_id
+            WHERE rr.constructor_id = ? ${yearFilter}
+          ),
+          SprintPoints AS (
+            SELECT COALESCE(SUM(sr.points), 0) as sprint_points
+            FROM sprint_results sr
+            JOIN races r ON sr.race_id = r.race_id
+            JOIN seasons s ON r.season_id = s.season_id
+            JOIN race_results rr ON sr.race_id = rr.race_id AND sr.driver_id = rr.driver_id
+            WHERE rr.constructor_id = ? ${yearFilter}
+          )
+          SELECT 
+            COUNT(DISTINCT r.race_id) as totalRaces,
+            COUNT(CASE WHEN rr.position = 1 THEN 1 END) as wins,
+            COUNT(CASE WHEN sr.position = 1 THEN 1 END) as sprintWins,
+            COUNT(CASE WHEN rr.position <= 3 THEN 1 END) as podiums,
+            COUNT(CASE WHEN rr.position <= 10 THEN 1 END) as pointFinishes,
+            COUNT(CASE WHEN rr.position IS NOT NULL THEN 1 END) as finishedRaces,
+            ROUND(AVG(CASE WHEN rr.position IS NOT NULL THEN rr.position END), 2) as avgFinishPosition,
+            (SELECT race_points + sprint_points FROM RacePoints, SprintPoints) as totalPoints
+          FROM races r
+          JOIN seasons s ON r.season_id = s.season_id
+          LEFT JOIN race_results rr ON r.race_id = rr.race_id AND rr.constructor_id = ?
+          LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.driver_id = rr.driver_id
+          WHERE 1=1 ${yearFilter}
+        `, [...params, ...params, ...params], (err, row) => {
+          if (err) reject(err);
+          resolve(row);
+        });
+      });
+    };
+
+    Promise.all([getPoints(), getStats()])
+      .then(([pointsData, statsData]) => {
+        res.json({
+          pointsProgression: pointsData,
+          stats: statsData
+        });
+      })
+      .catch(error => {
+        console.error('Database query error:', error);
+        res.status(500).json({ error: 'Database query failed' });
+      });
+
+  } catch (error) {
+    console.error('Server error in /api/constructor-stats:', error);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     db.close();
+  }
+});
+
+app.get('/api/constructor-driver-points/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const { year } = req.query;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  const yearFilter = year ? 'AND s.year = ?' : '';
+  const params = year ? [constructorId, year] : [constructorId];
+
+  try {
+    db.all(`
+      SELECT 
+        d.forename || ' ' || d.surname as driver_name,
+        r.round,
+        r.name as race_name,
+        COALESCE(rr.points, 0) as race_points,
+        COALESCE(sr.points, 0) as sprint_points,
+        COALESCE(rr.points, 0) + COALESCE(sr.points, 0) as total_points
+      FROM races r
+      JOIN seasons s ON r.season_id = s.season_id
+      JOIN race_results rr ON r.race_id = rr.race_id
+      LEFT JOIN sprint_results sr ON r.race_id = sr.race_id AND sr.driver_id = rr.driver_id
+      JOIN drivers d ON rr.driver_id = d.driver_id
+      WHERE rr.constructor_id = ? ${yearFilter}
+      ORDER BY s.year, r.round, d.surname
+    `, params, (err, rows) => {
+      if (err) {
+        console.error('Error fetching constructor driver points:', err);
+        res.status(500).json({ error: 'Failed to fetch constructor driver points' });
+        return;
+      }
+      res.json(rows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-driver-points:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get available constructors with their years
+app.get('/api/constructors', async (req, res) => {
+  const { year } = req.query;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    // First, get all available years
+    db.all(`
+      SELECT DISTINCT s.year
+      FROM seasons s
+      JOIN races r ON s.season_id = r.season_id
+      JOIN race_results rr ON r.race_id = rr.race_id
+      ORDER BY s.year DESC
+    `, [], (yearErr, yearRows) => {
+      if (yearErr) {
+        console.error('Error fetching years:', yearErr);
+        res.status(500).json({ error: 'Failed to fetch years' });
+        return;
+      }
+
+      const years = yearRows.map(row => row.year);
+      
+      // Then get constructors, filtered by year if specified
+      const yearFilter = year ? 'AND s.year = ?' : '';
+      const params = year ? [year] : [];
+      
+      db.all(`
+        SELECT DISTINCT 
+          c.constructor_id,
+          c.name,
+          c.nationality,
+          GROUP_CONCAT(DISTINCT s.year) as years
+        FROM constructors c
+        JOIN race_results rr ON c.constructor_id = rr.constructor_id
+        JOIN races r ON rr.race_id = r.race_id
+        JOIN seasons s ON r.season_id = s.season_id
+        WHERE 1=1 ${yearFilter}
+        GROUP BY c.constructor_id
+        ORDER BY c.name
+      `, params, (err, rows) => {
+        if (err) {
+          console.error('Error fetching constructors:', err);
+          res.status(500).json({ error: 'Failed to fetch constructors' });
+          return;
+        }
+        
+        // Process years into array for each constructor
+        const processedRows = rows.map(row => ({
+          ...row,
+          years: row.years.split(',').map(Number).sort((a, b) => b - a)
+        }));
+        
+        res.json({
+          years,
+          constructors: processedRows
+        });
+      });
+    });
+  } catch (error) {
+    console.error('Error fetching constructors:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close((err) => {
+      if (err) {
+        console.error('Error closing database:', err);
+      }
+    });
+  }
+});
+
+// Get constructor profile
+app.get('/api/constructor-profile/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const query = `
+      WITH ConstructorStanding AS (
+        SELECT 
+          constructor_id,
+          SUM(points) as total_points,
+          RANK() OVER (ORDER BY SUM(points) DESC) as championship_position
+        FROM race_results
+        GROUP BY constructor_id
+      )
+      SELECT 
+        c.*,
+        cs.championship_position,
+        cs.total_points
+      FROM constructors c
+      LEFT JOIN ConstructorStanding cs ON c.constructor_id = cs.constructor_id
+      WHERE c.constructor_id = ?
+    `;
+
+    db.get(query, [constructorId], (err, row) => {
+      if (err) {
+        console.error('Error fetching constructor profile:', err);
+        res.status(500).json({ error: 'Failed to fetch constructor profile' });
+        return;
+      }
+      res.json(row);
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-profile:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
+// Get constructor drivers
+app.get('/api/constructor-drivers/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const { year } = req.query;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const yearFilter = year ? 'AND s.year = ?' : '';
+    const params = year ? [constructorId, year] : [constructorId];
+
+    db.all(`
+      SELECT DISTINCT 
+        d.driver_id,
+        d.code,
+        d.forename,
+        d.surname,
+        d.nationality,
+        d.url
+      FROM drivers d
+      JOIN race_results rr ON d.driver_id = rr.driver_id
+      JOIN races r ON rr.race_id = r.race_id
+      JOIN seasons s ON r.season_id = s.season_id
+      WHERE rr.constructor_id = ? ${yearFilter}
+      ORDER BY d.surname
+    `, params, (err, rows) => {
+      if (err) {
+        console.error('Error fetching constructor drivers:', err);
+        res.status(500).json({ error: 'Failed to fetch constructor drivers' });
+        return;
+      }
+      res.json(rows);
+    });
+  } catch (error) {
+    console.error('Error in /api/constructor-drivers:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
+// Get constructor race results
+app.get('/api/constructor-race-results/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const { year } = req.query;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  const yearFilter = year ? 'AND s.year = ?' : '';
+  const params = year ? [constructorId, year] : [constructorId];
+
+  try {
+    db.all(`
+      SELECT 
+        r.round,
+        r.name as raceName,
+        d.forename || ' ' || d.surname as driverName,
+        rr.position,
+        rr.points,
+        rr.grid,
+        rr.status
+      FROM races r
+      JOIN seasons s ON r.season_id = s.season_id
+      JOIN race_results rr ON r.race_id = rr.race_id
+      JOIN drivers d ON rr.driver_id = d.driver_id
+      WHERE rr.constructor_id = ? ${yearFilter}
+      ORDER BY s.year, r.round, rr.position
+    `, params, (err, rows) => {
+      if (err) {
+        console.error('Error fetching race results:', err);
+        res.status(500).json({ error: 'Failed to fetch race results' });
+        return;
+      }
+      res.json(rows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-race-results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get constructor qualifying results
+app.get('/api/constructor-qualifying-results/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const { year } = req.query;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  try {
+    const yearFilter = year ? 'AND s.year = ?' : '';
+    const params = [constructorId, ...(year ? [year] : [])];
+
+    db.all(`
+      SELECT 
+        r.round,
+        r.name as raceName,
+        d.forename || ' ' || d.surname as driverName,
+        q.position,
+        q.q1_time as q1,
+        q.q2_time as q2,
+        q.q3_time as q3
+      FROM qualifying_results q
+      JOIN races r ON q.race_id = r.race_id
+      JOIN seasons s ON r.season_id = s.season_id
+      JOIN drivers d ON q.driver_id = d.driver_id
+      WHERE q.constructor_id = ? ${yearFilter}
+      ORDER BY s.year DESC, r.round ASC
+    `, params, (err, rows) => {
+      if (err) {
+        console.error('Error fetching qualifying results:', err);
+        res.status(500).json({ error: 'Failed to fetch qualifying results' });
+        return;
+      }
+      res.json(rows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-qualifying-results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    db.close();
+  }
+});
+
+// Get constructor sprint results
+app.get('/api/constructor-sprint-results/:constructorId', async (req, res) => {
+  const { constructorId } = req.params;
+  const { year } = req.query;
+  const db = new sqlite3.Database('./backend/sqlite.db');
+
+  const yearFilter = year ? 'AND s.year = ?' : '';
+  const params = year ? [constructorId, year] : [constructorId];
+
+  try {
+    db.all(`
+      SELECT 
+        r.round,
+        r.name as raceName,
+        d.forename || ' ' || d.surname as driverName,
+        sr.position,
+        sr.points,
+        sr.grid,
+        sr.status
+      FROM races r
+      JOIN seasons s ON r.season_id = s.season_id
+      JOIN sprint_results sr ON r.race_id = sr.race_id
+      JOIN race_results rr ON r.race_id = rr.race_id AND rr.driver_id = sr.driver_id
+      JOIN drivers d ON sr.driver_id = d.driver_id
+      WHERE rr.constructor_id = ? ${yearFilter}
+      ORDER BY s.year, r.round, sr.position
+    `, params, (err, rows) => {
+      if (err) {
+        console.error('Error fetching sprint results:', err);
+        res.status(500).json({ error: 'Failed to fetch sprint results' });
+        return;
+      }
+      res.json(rows);
+    });
+  } catch (error) {
+    console.error('Server error in /api/constructor-sprint-results:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

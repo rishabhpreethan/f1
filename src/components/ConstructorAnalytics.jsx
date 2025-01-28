@@ -227,79 +227,74 @@ function ConstructorAnalytics() {
 
   // Fetch constructor data
   useEffect(() => {
-    if (selectedConstructor && selectedYear) {
-      console.log('Fetching data for constructor:', selectedConstructor, 'and year:', selectedYear);
+    const fetchData = async () => {
+      if (!selectedConstructor || !selectedYear) return;
+      
       setLoading(true);
       setError(null);
+      
+      try {
+        const response = await fetch(`http://localhost:3001/api/constructor-stats/${selectedConstructor}?year=${selectedYear}`);
+        if (!response.ok) throw new Error('Failed to fetch constructor data');
+        
+        const data = await response.json();
+        setConstructorStats(data);
+        setDriverPointsData(data.driverPoints);
+      } catch (err) {
+        console.error('Error fetching constructor data:', err);
+        setError('Failed to load constructor data');
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    fetchData();
+  }, [selectedConstructor, selectedYear]);
+
+  // Fetch constructor profile
+  useEffect(() => {
+    if (selectedConstructor) {
+      fetch(`http://localhost:3001/api/constructor-profile/${selectedConstructor}`)
+        .then(res => res.json())
+        .then(data => {
+          setConstructorProfile(data);
+        })
+        .catch(error => console.error('Error fetching constructor profile:', error));
+    }
+  }, [selectedConstructor]);
+
+  // Fetch constructor drivers
+  useEffect(() => {
+    if (selectedConstructor && selectedYear) {
+      fetch(`http://localhost:3001/api/constructor-drivers/${selectedConstructor}?year=${selectedYear}`)
+        .then(res => res.json())
+        .then(data => {
+          setConstructorDrivers(data);
+        })
+        .catch(error => console.error('Error fetching constructor drivers:', error));
+    }
+  }, [selectedConstructor, selectedYear]);
+
+  // Fetch results
+  useEffect(() => {
+    if (selectedConstructor && selectedYear) {
       Promise.all([
-        fetch(`http://localhost:3001/api/constructor-stats/${selectedConstructor}?year=${selectedYear}`),
-        fetch(`http://localhost:3001/api/constructor-profile/${selectedConstructor}`),
-        fetch(`http://localhost:3001/api/constructor-drivers/${selectedConstructor}?year=${selectedYear}`),
-        fetch(`http://localhost:3001/api/constructor-driver-points/${selectedConstructor}?year=${selectedYear}`),
         fetch(`http://localhost:3001/api/constructor-race-results/${selectedConstructor}?year=${selectedYear}`),
         fetch(`http://localhost:3001/api/constructor-qualifying-results/${selectedConstructor}?year=${selectedYear}`),
         fetch(`http://localhost:3001/api/constructor-sprint-results/${selectedConstructor}?year=${selectedYear}`)
       ])
-        .then(([statsRes, profileRes, driversRes, pointsRes, raceResultsRes, qualifyingResultsRes, sprintResultsRes]) => 
-          Promise.all([statsRes.json(), profileRes.json(), driversRes.json(), pointsRes.json(), raceResultsRes.json(), qualifyingResultsRes.json(), sprintResultsRes.json()])
+        .then(([raceResultsRes, qualifyingResultsRes, sprintResultsRes]) => 
+          Promise.all([raceResultsRes.json(), qualifyingResultsRes.json(), sprintResultsRes.json()])
         )
-        .then(([statsData, profileData, driversData, pointsData, raceResultsData, qualifyingResultsData, sprintResultsData]) => {
-          console.log('Received data:', { statsData, profileData, driversData, pointsData, raceResultsData, qualifyingResultsData, sprintResultsData });
-          
-          setConstructorStats(statsData);
-          setConstructorProfile(profileData);
-          setConstructorDrivers(driversData);
-          setDriverPointsData({
-            drivers: [...new Set(pointsData.map(d => d.driverName))],
-            data: pointsData
-          });
-          
+        .then(([raceResultsData, qualifyingResultsData, sprintResultsData]) => {
           // Process and set results
           setRaceResults(processResults(raceResultsData));
           setQualifyingResults(processResults(qualifyingResultsData));
           setSprintResults(processResults(sprintResultsData));
-          
-          setLoading(false);
         })
-        .catch(error => {
-          console.error('Error fetching constructor data:', error);
-          setError('Failed to load constructor data. Please try again later.');
-          setLoading(false);
-        });
+        .catch(error => console.error('Error fetching results:', error));
     }
   }, [selectedConstructor, selectedYear]);
-
-  // Process driver points data when it's received
-  useEffect(() => {
-    if (constructorDrivers.length > 0 && selectedYear) {
-      fetch(`http://localhost:3001/api/constructor-driver-points/${selectedConstructor}?year=${selectedYear}`)
-        .then(res => res.json())
-        .then(data => {
-          // Process the data to get unique drivers and their points per race
-          const drivers = [...new Set(data.map(d => d.driverName))];
-          const processedData = data.reduce((acc, curr) => {
-            const existingRace = acc.find(r => r.round === curr.round);
-            if (existingRace) {
-              existingRace[curr.driverName] = curr.points;
-            } else {
-              acc.push({
-                round: curr.round,
-                raceName: curr.raceName,
-                [curr.driverName]: curr.points
-              });
-            }
-            return acc;
-          }, []);
-          
-          setDriverPointsData({
-            drivers,
-            data: processedData
-          });
-        })
-        .catch(error => console.error('Error fetching driver points:', error));
-    }
-  }, [constructorDrivers, selectedConstructor, selectedYear]);
 
   const toggleResults = () => {
     setShowResults(!showResults);
@@ -607,7 +602,7 @@ function ConstructorAnalytics() {
         )}
 
         {/* Driver Points Contribution Chart */}
-        {driverPointsData && (
+        {driverPointsData && driverPointsData.drivers && (
           <Card>
             <CardHeader>
               <CardTitle>Driver Points Contribution</CardTitle>
@@ -616,7 +611,7 @@ function ConstructorAnalytics() {
             <CardContent>
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
+                  <BarChart
                     data={driverPointsData.data}
                     margin={{
                       top: 5,
@@ -641,20 +636,28 @@ function ConstructorAnalytics() {
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
                           const raceName = payload[0]?.payload.raceName;
+                          const totalPoints = payload.reduce((sum, entry) => sum + (entry.value || 0), 0);
                           return (
                             <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/20 shadow-xl">
                               <p className="text-sm font-medium mb-2">{raceName}</p>
                               <div className="space-y-1">
                                 {payload.map((entry, index) => (
-                                  <div key={index} className="flex items-center gap-2">
-                                    <div 
-                                      className="h-2.5 w-2.5 rounded-[2px]"
-                                      style={{ backgroundColor: entry.color }}
-                                    />
-                                    <span className="text-xs">{entry.name}</span>
-                                    <span className="ml-auto text-xs font-mono">{entry.value}</span>
-                                  </div>
+                                  entry.value > 0 && (
+                                    <div key={index} className="flex items-center gap-2">
+                                      <div 
+                                        className="h-2.5 w-2.5 rounded-[2px]"
+                                        style={{ backgroundColor: entry.color }}
+                                      />
+                                      <span className="text-xs">{entry.name}</span>
+                                      <span className="ml-auto text-xs font-mono">{entry.value}</span>
+                                    </div>
+                                  )
                                 ))}
+                                <div className="flex items-center gap-2 border-t border-white/10 mt-2 pt-2">
+                                  <div className="h-2.5 w-2.5 rounded-[2px] bg-[#22c55e]" />
+                                  <span className="text-xs">Total Points</span>
+                                  <span className="ml-auto text-xs font-mono">{totalPoints}</span>
+                                </div>
                               </div>
                             </div>
                           );
@@ -662,18 +665,17 @@ function ConstructorAnalytics() {
                         return null;
                       }}
                     />
+                    <Legend />
                     {driverPointsData.drivers.map((driver, index) => (
-                      <Area
+                      <Bar
                         key={driver}
-                        type="monotone"
                         dataKey={driver}
-                        stackId="1"
-                        stroke={`hsl(${(index * 360) / driverPointsData.drivers.length}, 70%, 50%)`}
+                        stackId="a"
                         fill={`hsl(${(index * 360) / driverPointsData.drivers.length}, 70%, 50%)`}
                         name={driver}
                       />
                     ))}
-                  </AreaChart>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>

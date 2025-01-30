@@ -341,6 +341,34 @@ Given below within <SCHEMA> xml tags is the SQLite schema for the Formula 1 data
             });
         });
     }
+
+    async generateResponse(prompt, queryResult) {
+        try {
+            const completion = await this.groq.chat.completions.create({
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a Formula 1 expert assistant. Your task is to provide clear, natural responses to questions about F1 using the data provided. Keep responses concise and conversational. Only use the information given in the data - do not make assumptions or add information not present in the data."
+                    },
+                    {
+                        role: "user",
+                        content: `Question: "${prompt}"\nData: ${JSON.stringify(queryResult)}\n\nPlease provide a natural, conversational response using only the information from the data provided.`
+                    }
+                ],
+                model: "llama-3.3-70b-versatile",
+                temperature: 0.7,
+                max_tokens: 1024,
+                top_p: 1,
+                stop: null,
+                stream: false
+            });
+
+            return completion.choices[0]?.message?.content || 'I apologize, but I could not generate a response based on the available data.';
+        } catch (error) {
+            console.error('Error generating response:', error);
+            throw error;
+        }
+    }
 }
 
 export default ChatService;

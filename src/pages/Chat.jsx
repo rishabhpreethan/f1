@@ -183,13 +183,40 @@ const formatMessage = (msg) => {
     try {
       const formattedJson = JSON.stringify(JSON.parse(msg.text), null, 2);
       return (
-        <CodeBlock>
-          {formattedJson}
-        </CodeBlock>
+        <>
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              color: 'text.secondary', 
+              mb: 1, 
+              fontWeight: 500,
+              fontSize: '0.875rem' 
+            }}
+          >
+            Query Result:
+          </Typography>
+          <CodeBlock>
+            {formattedJson}
+          </CodeBlock>
+        </>
       );
     } catch {
       return msg.text;
     }
+  }
+
+  if (msg.isResponse) {
+    return (
+      <Typography 
+        variant="body1" 
+        sx={{ 
+          color: 'text.primary',
+          lineHeight: 1.6
+        }}
+      >
+        {msg.text}
+      </Typography>
+    );
   }
   
   return msg.text;
@@ -200,64 +227,42 @@ const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const processUserQuery = async (userMessage) => {
-    if (message.trim()) {
-      try {
-        setIsLoading(true);
-        
-        setMessages(prev => [...prev, {
-          user: 'You',
-          text: userMessage,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }]);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!message.trim() || isLoading) return;
 
-        const generateResponse = await axios.post('http://localhost:3001/api/generate-query', {
-          prompt: userMessage
+    const userMessage = message;
+    setMessage('');
+    setIsLoading(true);
+
+    // Add user message to chat
+    setMessages(prev => [...prev, { text: userMessage, isUser: true }]);
+
+    try {
+      const response = await axios.post('http://localhost:3001/api/chat', { message: userMessage });
+      
+      if (response.data.success) {
+        // Add each result as a separate message
+        response.data.results.forEach(result => {
+          setMessages(prev => [...prev, { ...result, isUser: false }]);
         });
-
-        const sqlQuery = generateResponse.data.sqlQuery;
-        
-        setMessages(prev => [...prev, {
-          user: 'System',
-          text: sqlQuery,
-          isQuery: true,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }]);
-
-        const queryResponse = await axios.post('http://localhost:3001/api/execute-query', {
-          query: sqlQuery
-        });
-
-        setMessages(prev => [...prev, {
-          user: 'System',
-          text: JSON.stringify(queryResponse.data),
-          isResult: true,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }]);
-
-      } catch (error) {
-        const errorMessage = error.response?.data?.details || error.response?.data?.error || error.message;
-        setMessages(prev => [...prev, {
-          user: 'System',
-          text: `Error: ${errorMessage}`,
-          isError: true,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }]);
-      } finally {
-        setIsLoading(false);
-        setMessage('');
       }
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages(prev => [...prev, { 
+        text: 'Sorry, there was an error processing your request.', 
+        isUser: false,
+        isError: true
+      }]);
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const handleSend = () => {
-    processUserQuery(message);
   };
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      handleSubmit(e);
     }
   };
 
@@ -265,14 +270,14 @@ const Chat = () => {
     <PageContainer>
       <ChatContainer>
         {messages.map((msg, index) => (
-          <MessageWrapper key={index} isuser={msg.user === 'You' ? 'true' : 'false'}>
-            <MessageContent isuser={msg.user === 'You' ? 'true' : 'false'}>
-              {msg.user !== 'You' && (
-                <MessageAvatar isuser={msg.user === 'You' ? 'true' : 'false'}>
+          <MessageWrapper key={index} isuser={msg.isUser ? 'true' : 'false'}>
+            <MessageContent isuser={msg.isUser ? 'true' : 'false'}>
+              {msg.isUser !== true && (
+                <MessageAvatar isuser={msg.isUser ? 'true' : 'false'}>
                   <SmartToyIcon />
                 </MessageAvatar>
               )}
-              <MessageBubble isuser={msg.user === 'You' ? 'true' : 'false'}>
+              <MessageBubble isuser={msg.isUser ? 'true' : 'false'}>
                 <MessageText>
                   {formatMessage(msg)}
                 </MessageText>
@@ -295,7 +300,7 @@ const Chat = () => {
             disabled={isLoading}
           />
           <SendButton
-            onClick={handleSend}
+            onClick={handleSubmit}
             disabled={isLoading || !message.trim()}
           >
             {isLoading ? (

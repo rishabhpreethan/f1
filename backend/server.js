@@ -11,7 +11,11 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Initialize chat service with API key
@@ -381,37 +385,43 @@ app.get('/api/race-results/:driverId', async (req, res) => {
 });
 
 // Add chat query endpoint
-app.post('/api/generate-query', async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    console.log('Received prompt:', prompt);
-    
-    const query = await chatService.generateQuery(prompt);
-    res.json({ success: true, sqlQuery: query });
-  } catch (error) {
-    console.error('Error generating query:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Failed to generate query' 
-    });
-  }
-});
-
-// Add execute query endpoint
-app.post('/api/execute-query', async (req, res) => {
-  try {
-    const { query } = req.body;
-    console.log('Executing query:', query);
-    
-    const results = await chatService.executeQuery(query);
-    res.json({ success: true, results });
-  } catch (error) {
-    console.error('Error in execute-query:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Failed to execute query' 
-    });
-  }
+app.post('/api/chat', async (req, res) => {
+    try {
+        const { message } = req.body;
+        
+        // Generate SQL query
+        const sqlQuery = await chatService.generateQuery(message);
+        
+        // Execute the query
+        const queryResults = await chatService.executeQuery(sqlQuery);
+        
+        // Generate human-like response
+        const humanResponse = await chatService.generateResponse(message, queryResults);
+        
+        res.json({
+            success: true,
+            results: [
+                {
+                    isQuery: true,
+                    text: sqlQuery
+                },
+                {
+                    isResult: true,
+                    text: JSON.stringify(queryResults)
+                },
+                {
+                    isResponse: true,
+                    text: humanResponse
+                }
+            ]
+        });
+    } catch (error) {
+        console.error('Error in chat endpoint:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message || 'Internal server error' 
+        });
+    }
 });
 
 // Start server

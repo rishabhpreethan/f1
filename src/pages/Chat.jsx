@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import ReactECharts from 'echarts-for-react';
 import {
   Box,
   Typography,
@@ -222,68 +223,144 @@ const formatMessage = (msg) => {
   return msg.text;
 };
 
+const extractEchartsOptions = (content) => {
+  try {
+    // Try to extract content from markdown code block
+    const match = content.match(/```echarts\n([\s\S]*?)\n```/);
+    if (match && match[1]) {
+      const optionsStr = match[1].trim();
+      
+      // Handle case where the string starts with "option = "
+      if (optionsStr.startsWith('option = ')) {
+        const jsonStr = optionsStr.replace('option = ', '');
+        return JSON.parse(jsonStr);
+      }
+      
+      // Try parsing as direct JSON
+      return JSON.parse(optionsStr);
+    }
+    
+    // If no markdown block found, try parsing the entire content as JSON
+    return JSON.parse(content);
+  } catch (error) {
+    console.error('Failed to parse ECharts options:', error);
+    console.log('Content received:', content);
+    return null;
+  }
+};
+
 const Chat = () => {
-  const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!message.trim() || isLoading) return;
+    if (!input.trim()) return;
 
-    const userMessage = message;
-    setMessage('');
-    setIsLoading(true);
-
-    // Add user message to chat
-    setMessages(prev => [...prev, { text: userMessage, isUser: true }]);
+    const userMessage = { 
+      role: 'user', 
+      content: {
+        text: input,
+        isResponse: true
+      }
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setLoading(true);
+    setError(null);
 
     try {
-      const response = await axios.post('http://localhost:3001/api/chat', { message: userMessage });
+      // Get the initial response
+      const { data } = await axios.post('http://localhost:3001/api/chat', { prompt: input });
       
-      if (response.data.success) {
-        // Add each result as a separate message
-        response.data.results.forEach(result => {
-          setMessages(prev => [...prev, { ...result, isUser: false }]);
-        });
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to get response');
       }
-    } catch (error) {
-      console.error('Error:', error);
-      setMessages(prev => [...prev, { 
-        text: 'Sorry, there was an error processing your request.', 
-        isUser: false,
-        isError: true
+
+      // Add text response
+      const assistantMessage = { 
+        role: 'assistant', 
+        content: {
+          text: data.response,
+          isResponse: true
+        }
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+
+      // Generate ECharts options if we have query results
+      if (data.queryResult) {
+        try {
+          const echartsResponse = await axios.post('http://localhost:3001/api/generate-echarts', { 
+            queryResult: data.queryResult 
+          });
+          
+          if (echartsResponse.data.success) {
+            const echartsOptions = extractEchartsOptions(echartsResponse.data.data);
+            if (echartsOptions) {
+              setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: 'chart',
+                chartOptions: echartsOptions
+              }]);
+            }
+          }
+        } catch (chartError) {
+          console.error('Error generating chart:', chartError);
+        }
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      setError(err.message || 'Failed to get response. Please try again.');
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: {
+          text: 'Sorry, I encountered an error while processing your request. Please try again.',
+          isResponse: true
+        }
       }]);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
+  const MessageItem = ({ message }) => {
+    const isUser = message.role === 'user';
+
+    if (message.content === 'chart' && message.chartOptions) {
+      return (
+        <MessageWrapper>
+          <MessageContent>
+            <Box sx={{ width: '100%', height: '400px' }}>
+              <ReactECharts option={message.chartOptions} style={{ height: '100%' }} />
+            </Box>
+          </MessageContent>
+        </MessageWrapper>
+      );
     }
+
+    return (
+      <MessageWrapper isuser={isUser ? 'true' : 'false'}>
+        <MessageContent isuser={isUser ? 'true' : 'false'}>
+          <MessageAvatar isuser={isUser ? 'true' : 'false'}>
+            {isUser ? <PersonIcon /> : <SmartToyIcon />}
+          </MessageAvatar>
+          <MessageBubble isuser={isUser ? 'true' : 'false'}>
+            <MessageText>
+              {formatMessage(message.content)}
+            </MessageText>
+          </MessageBubble>
+        </MessageContent>
+      </MessageWrapper>
+    );
   };
 
   return (
     <PageContainer>
       <ChatContainer>
         {messages.map((msg, index) => (
-          <MessageWrapper key={index} isuser={msg.isUser ? 'true' : 'false'}>
-            <MessageContent isuser={msg.isUser ? 'true' : 'false'}>
-              {msg.isUser !== true && (
-                <MessageAvatar isuser={msg.isUser ? 'true' : 'false'}>
-                  <SmartToyIcon />
-                </MessageAvatar>
-              )}
-              <MessageBubble isuser={msg.isUser ? 'true' : 'false'}>
-                <MessageText>
-                  {formatMessage(msg)}
-                </MessageText>
-              </MessageBubble>
-            </MessageContent>
-          </MessageWrapper>
+          <MessageItem key={index} message={msg} />
         ))}
       </ChatContainer>
       
@@ -293,20 +370,25 @@ const Chat = () => {
             fullWidth
             multiline
             maxRows={4}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
             placeholder="Send a message..."
-            disabled={isLoading}
+            disabled={loading}
           />
           <SendButton
             onClick={handleSubmit}
-            disabled={isLoading || !message.trim()}
+            disabled={loading || !input.trim()}
           >
-            {isLoading ? (
+            {loading ? (
               <CircularProgress size={20} />
             ) : (
-              <RotatingIcon hastext={message.trim() ? 'true' : 'false'} />
+              <RotatingIcon hastext={input.trim() ? 'true' : 'false'} />
             )}
           </SendButton>
         </InputWrapper>

@@ -387,33 +387,22 @@ app.get('/api/race-results/:driverId', async (req, res) => {
 // Add chat query endpoint
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message } = req.body;
+        const { prompt } = req.body;
         
         // Generate SQL query
-        const sqlQuery = await chatService.generateQuery(message);
+        const sqlQuery = await chatService.generateQuery(prompt);
         
         // Execute the query
-        const queryResults = await chatService.executeQuery(sqlQuery);
+        const queryResult = await chatService.executeQuery(sqlQuery);
         
         // Generate human-like response
-        const humanResponse = await chatService.generateResponse(message, queryResults);
+        const response = await chatService.generateResponse(prompt, queryResult);
         
         res.json({
             success: true,
-            results: [
-                {
-                    isQuery: true,
-                    text: sqlQuery
-                },
-                {
-                    isResult: true,
-                    text: JSON.stringify(queryResults)
-                },
-                {
-                    isResponse: true,
-                    text: humanResponse
-                }
-            ]
+            queryResult,
+            response,
+            sqlQuery
         });
     } catch (error) {
         console.error('Error in chat endpoint:', error);
@@ -422,6 +411,22 @@ app.post('/api/chat', async (req, res) => {
             error: error.message || 'Internal server error' 
         });
     }
+});
+
+// Generate ECharts options
+app.post('/api/generate-echarts', async (req, res) => {
+  try {
+    const { queryResult } = req.body;
+    if (!queryResult) {
+      return res.status(400).json({ success: false, error: 'Query result is required' });
+    }
+    
+    const echartsOptions = await chatService.generateEchartOptions(queryResult);
+    res.json({ success: true, data: echartsOptions });
+  } catch (error) {
+    console.error('Error generating ECharts options:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate ECharts options' });
+  }
 });
 
 // Start server

@@ -369,6 +369,34 @@ Given below within <SCHEMA> xml tags is the SQLite schema for the Formula 1 data
             throw error;
         }
     }
+
+    async generateEchartOptions(queryResult) {
+        try {
+            const completion = await this.groq.chat.completions.create({
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a Formula 1 expert assistant. Your task is to generate ECharts visualization options based on the provided data. Format your response as a markdown code block with the 'echarts' language specifier. The content inside the code block must be a valid JSON object (not a JavaScript object). Do not include 'option = ' or any other JavaScript syntax - just the pure JSON object. Example format:\n\n```echarts\n{\n  \"title\": { \"text\": \"F1 Stats\" },\n  \"xAxis\": { \"type\": \"category\" }\n}\n```"
+                    },
+                    {
+                        role: "user",
+                        content: `Data: ${JSON.stringify(queryResult)}\n\nGenerate ECharts options as a JSON object to visualize this data effectively.`
+                    }
+                ],
+                model: "llama-3.3-70b-versatile",
+                temperature: 0.7,
+                max_tokens: 2048,
+                top_p: 1,
+                stop: null,
+                stream: false
+            });
+
+            return completion.choices[0]?.message?.content || 'I apologize, but I could not generate a response based on the available data.';
+        } catch (error) {
+            console.error('Error generating response:', error);
+            throw error;
+        }
+    }
 }
 
 export default ChatService;

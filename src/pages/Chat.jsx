@@ -14,8 +14,8 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/system';
 import SendIcon from '@mui/icons-material/Send';
-import SmartToyIcon from '@mui/icons-material/SmartToy';
-import PersonIcon from '@mui/icons-material/Person';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faDharmachakra } from '@fortawesome/free-solid-svg-icons';
 
 const PageContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
@@ -61,13 +61,38 @@ const MessageBubble = styled(Box)(({ theme, isuser }) => ({
   boxShadow: '0 0 0.5rem rgba(0, 0, 0, 0.05)',
 }));
 
-const MessageAvatar = styled(Avatar)(({ theme, isuser }) => ({
+const MessageAvatar = styled(Avatar)(({ theme, isuser, isLoading }) => ({
   width: 30,
   height: 30,
-  backgroundColor: isuser === 'true' 
-    ? '#ef4444'
-    : '#10a37f',
+  backgroundColor: '#10a37f',
+  display: isuser === 'true' ? 'none' : 'flex',
+  '@keyframes rotate': {
+    from: { transform: 'rotate(0deg)' },
+    to: { transform: 'rotate(360deg)' }
+  },
+  '& svg': {
+    animation: isLoading ? 'rotate 1s linear infinite' : 'none',
+    transformOrigin: 'center',
+    fontSize: '1.2rem',
+    color: 'white'
+  }
 }));
+
+const LoadingMessage = () => (
+  <MessageWrapper isuser="false">
+    <MessageContent isuser="false">
+      <MessageAvatar isuser="false" isLoading={true}>
+        <FontAwesomeIcon icon={faDharmachakra} />
+      </MessageAvatar>
+      <MessageBubble isuser="false">
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CircularProgress size={15} />
+          <MessageText>Generating response...</MessageText>
+        </Box>
+      </MessageBubble>
+    </MessageContent>
+  </MessageWrapper>
+);
 
 const MessageText = styled(Typography)(({ theme }) => ({
   fontSize: '0.9375rem',
@@ -343,8 +368,8 @@ const Chat = () => {
     return (
       <MessageWrapper isuser={isUser ? 'true' : 'false'}>
         <MessageContent isuser={isUser ? 'true' : 'false'}>
-          <MessageAvatar isuser={isUser ? 'true' : 'false'}>
-            {isUser ? <PersonIcon /> : <SmartToyIcon />}
+          <MessageAvatar isuser={isUser ? 'true' : 'false'} isLoading={false}>
+            {!isUser && <FontAwesomeIcon icon={faDharmachakra} />}
           </MessageAvatar>
           <MessageBubble isuser={isUser ? 'true' : 'false'}>
             <MessageText>
@@ -362,6 +387,7 @@ const Chat = () => {
         {messages.map((msg, index) => (
           <MessageItem key={index} message={msg} />
         ))}
+        {loading && <LoadingMessage />}
       </ChatContainer>
       
       <InputContainer>

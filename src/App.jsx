@@ -9,6 +9,7 @@ import Blog from './pages/Blog';
 import Chat from './pages/Chat';
 import Analytics from './pages/Analytics';
 import Login from './pages/Login';
+import News from './pages/News';
 
 function AppContent() {
   const location = useLocation();
@@ -27,6 +28,7 @@ function AppContent() {
             <Route path="/blog" element={<Blog />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/news" element={<News />} />
           </Routes>
         </Box>
       </Box>

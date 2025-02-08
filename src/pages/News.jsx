@@ -1,27 +1,53 @@
-import React from 'react';
-import { Container, Typography, Card, CardContent, Grid } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Container, Typography, Card, CardContent, Grid, CardMedia, Link, CircularProgress, Box } from '@mui/material';
+import axios from 'axios';
 
 const News = () => {
-  const dummyNews = [
-    {
-      id: 1,
-      title: "Hamilton Signs with Ferrari for 2025",
-      content: "Lewis Hamilton makes a shocking move to Ferrari for the 2025 season.",
-      date: "Feb 8, 2024"
-    },
-    {
-      id: 2,
-      title: "Red Bull Unveils RB20",
-      content: "Red Bull Racing reveals their 2024 challenger with innovative design features.",
-      date: "Feb 7, 2024"
-    },
-    {
-      id: 3,
-      title: "New Sprint Format Announced",
-      content: "F1 introduces revised sprint race format for the 2024 season.",
-      date: "Feb 6, 2024"
-    }
-  ];
+  const [news, setNews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        const response = await axios.get('https://newsdata.io/api/1/news', {
+          params: {
+            apikey: 'pub_68416a66ad266452db6eaa610193ecf2fbf92',
+            q: 'F1',
+            language: 'en'
+          }
+        });
+
+        if (response.data.results) {
+          setNews(response.data.results);
+        }
+        setLoading(false);
+      } catch (err) {
+        setError('Failed to fetch news. Please try again later.');
+        setLoading(false);
+      }
+    };
+
+    fetchNews();
+  }, []);
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Typography color="error" align="center">
+          {error}
+        </Typography>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -29,18 +55,45 @@ const News = () => {
         Latest F1 News
       </Typography>
       <Grid container spacing={3}>
-        {dummyNews.map((news) => (
-          <Grid item xs={12} md={4} key={news.id}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent>
+        {news.map((article, index) => (
+          <Grid item xs={12} md={6} key={index}>
+            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              {article.image_url && (
+                <CardMedia
+                  component="img"
+                  height="200"
+                  image={article.image_url}
+                  alt={article.title}
+                  sx={{ objectFit: 'cover' }}
+                />
+              )}
+              <CardContent sx={{ flexGrow: 1 }}>
                 <Typography variant="h6" component="h2" gutterBottom>
-                  {news.title}
+                  <Link 
+                    href={article.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    sx={{ 
+                      textDecoration: 'none', 
+                      color: 'inherit',
+                      '&:hover': { color: 'primary.main' } 
+                    }}
+                  >
+                    {article.title}
+                  </Link>
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {news.content}
+                  {article.description ? article.description.slice(0, 200) + '...' : 'No description available'}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {news.date}
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {new Date(article.pubDate).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Source: {article.source_id}
                 </Typography>
               </CardContent>
             </Card>

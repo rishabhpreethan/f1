@@ -89,6 +89,20 @@ const Navbar = () => {
             >
               Analytics
             </Button>
+            <Button
+              component={Link}
+              to="/news"
+              sx={{
+                color: 'text.primary',
+                fontWeight: 500,
+                '&:hover': {
+                  color: 'primary.main',
+
+                },
+              }}
+            >
+              News
+            </Button>
             {token ? (
               <Button
                 onClick={handleLogout}

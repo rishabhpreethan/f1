@@ -184,7 +184,7 @@ function ConstructorAnalytics() {
     setLoading(true);
     setError(null);
     
-    fetch('http://localhost:3001/api/constructors')
+    fetch('/api/constructors')
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch constructors');
         return res.json();
@@ -208,7 +208,7 @@ function ConstructorAnalytics() {
   // Update available constructors when year changes
   useEffect(() => {
     if (selectedYear) {
-      fetch(`http://localhost:3001/api/constructors?year=${selectedYear}`)
+      fetch(`/api/constructors?year=${selectedYear}`)
         .then(res => res.json())
         .then(data => {
           setAvailableConstructors(data.constructors);
@@ -234,7 +234,7 @@ function ConstructorAnalytics() {
       setError(null);
       
       try {
-        const response = await fetch(`http://localhost:3001/api/constructor-stats/${selectedConstructor}?year=${selectedYear}`);
+        const response = await fetch(`/api/constructor-stats/${selectedConstructor}?year=${selectedYear}`);
         if (!response.ok) throw new Error('Failed to fetch constructor data');
         
         const data = await response.json();
@@ -254,7 +254,7 @@ function ConstructorAnalytics() {
   // Fetch constructor profile
   useEffect(() => {
     if (selectedConstructor) {
-      fetch(`http://localhost:3001/api/constructor-profile/${selectedConstructor}`)
+      fetch(`/api/constructor-profile/${selectedConstructor}`)
         .then(res => res.json())
         .then(data => {
           setConstructorProfile(data);
@@ -266,7 +266,7 @@ function ConstructorAnalytics() {
   // Fetch constructor drivers
   useEffect(() => {
     if (selectedConstructor && selectedYear) {
-      fetch(`http://localhost:3001/api/constructor-drivers/${selectedConstructor}?year=${selectedYear}`)
+      fetch(`/api/constructor-drivers/${selectedConstructor}?year=${selectedYear}`)
         .then(res => res.json())
         .then(data => {
           setConstructorDrivers(data);
@@ -279,18 +279,17 @@ function ConstructorAnalytics() {
   useEffect(() => {
     if (selectedConstructor && selectedYear) {
       Promise.all([
-        fetch(`http://localhost:3001/api/constructor-race-results/${selectedConstructor}?year=${selectedYear}`),
-        fetch(`http://localhost:3001/api/constructor-qualifying-results/${selectedConstructor}?year=${selectedYear}`),
-        fetch(`http://localhost:3001/api/constructor-sprint-results/${selectedConstructor}?year=${selectedYear}`)
+        fetch(`/api/constructor-race-results/${selectedConstructor}?year=${selectedYear}`),
+        fetch(`/api/constructor-qualifying-results/${selectedConstructor}?year=${selectedYear}`),
+        fetch(`/api/constructor-sprint-results/${selectedConstructor}?year=${selectedYear}`)
       ])
         .then(([raceResultsRes, qualifyingResultsRes, sprintResultsRes]) => 
           Promise.all([raceResultsRes.json(), qualifyingResultsRes.json(), sprintResultsRes.json()])
         )
-        .then(([raceResultsData, qualifyingResultsData, sprintResultsData]) => {
-          // Process and set results
-          setRaceResults(processResults(raceResultsData));
-          setQualifyingResults(processResults(qualifyingResultsData));
-          setSprintResults(processResults(sprintResultsData));
+        .then(([raceData, qualifyingData, sprintData]) => {
+          setRaceResults(processResults(raceData, 'race'));
+          setQualifyingResults(processResults(qualifyingData));
+          setSprintResults(processResults(sprintData));
         })
         .catch(error => console.error('Error fetching results:', error));
     }

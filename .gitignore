@@ -23,3 +23,44 @@ backend/sqlite.db
 *.njsproj
 *.sln
 *.sw?
+
+# Environments (do not commit secrets)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Framework/build outputs and caches
+.next/
+out/
+.turbo/
+.cache/
+.vite/
+.parcel-cache/
+.rollup.cache/
+coverage/
+build/
+tmp/
+temp/
+*.tsbuildinfo
+
+# Python virtualenv and caches
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Databases and dumps (can be very large)
+*.sqlite
+*.sqlite3
+*.db
+db/*.sqlite*
+db/*.db
+db/backups/
+
+# Run artifacts and uploads
+runs/
+public/uploads/
+
+# OS junk
+Thumbs.db

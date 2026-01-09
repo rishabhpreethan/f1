@@ -171,7 +171,7 @@ function Analytics() {
 
   // Fetch years and initial drivers
   useEffect(() => {
-    fetch('http://localhost:3001/api/drivers')
+    fetch('/api/drivers')
       .then(res => res.json())
       .then(data => {
         setYears(data.years);
@@ -186,7 +186,7 @@ function Analytics() {
   // Update available drivers when year changes
   useEffect(() => {
     if (selectedYear) {
-      fetch(`http://localhost:3001/api/drivers?year=${selectedYear}`)
+      fetch(`/api/drivers?year=${selectedYear}`)
         .then(res => res.json())
         .then(data => {
           setAvailableDrivers(data.drivers);
@@ -208,11 +208,11 @@ function Analytics() {
     if (selectedDriver && selectedYear) {
       setLoading(true);
       Promise.all([
-        fetch(`http://localhost:3001/api/driver-stats/${selectedDriver}?year=${selectedYear}`),
-        fetch(`http://localhost:3001/api/qualifying-results/${selectedDriver}?year=${selectedYear}`),
-        fetch(`http://localhost:3001/api/race-results/${selectedDriver}?year=${selectedYear}`),
-        fetch(`http://localhost:3001/api/sprint-results/${selectedDriver}?year=${selectedYear}`),
-        fetch(`http://localhost:3001/api/driver-profile/${selectedDriver}`)
+        fetch(`/api/driver-stats/${selectedDriver}?year=${selectedYear}`),
+        fetch(`/api/qualifying-results/${selectedDriver}?year=${selectedYear}`),
+        fetch(`/api/race-results/${selectedDriver}?year=${selectedYear}`),
+        fetch(`/api/sprint-results/${selectedDriver}?year=${selectedYear}`),
+        fetch(`/api/driver-profile/${selectedDriver}`)
       ])
         .then(async ([statsRes, qualifyingRes, raceRes, sprintRes, profileRes]) => {
           const [statsData, qualifyingData, raceData, sprintData, profileData] = await Promise.all([

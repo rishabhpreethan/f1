@@ -1,16 +1,9 @@
 import { AppBar, Toolbar, Typography, Button, Box, Container } from '@mui/material';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import SpeedIcon from '@mui/icons-material/Speed';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 
 const Navbar = () => {
-  const navigate = useNavigate();
-  const token = localStorage.getItem('token');
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
-  };
+  // Auth removed; only navigation links remain
 
   return (
     <AppBar 
@@ -35,7 +28,7 @@ const Navbar = () => {
             <Typography
               variant="h6"
               component={Link}
-              to="/"
+              to="/analytics"
               sx={{
                 textDecoration: 'none',
                 color: 'text.primary',
@@ -63,19 +56,7 @@ const Navbar = () => {
             >
               Blog
             </Button>
-            <Button
-              component={Link}
-              to="/chat"
-              sx={{
-                color: 'text.primary',
-                fontWeight: 500,
-                '&:hover': {
-                  color: 'primary.main',
-                },
-              }}
-            >
-              Chat
-            </Button>
+            {/* Chat removed */}
             <Button
               component={Link}
               to="/analytics"
@@ -89,38 +70,21 @@ const Navbar = () => {
             >
               Analytics
             </Button>
-            {token ? (
-              <Button
-                onClick={handleLogout}
-                sx={{
-                  color: 'text.primary',
-                  fontWeight: 500,
-                  '&:hover': {
-                    color: 'primary.main',
-                  },
-                }}
-                startIcon={<PersonOutlineIcon />}
-              >
-                Logout
-              </Button>
-            ) : (
-              <Button
-                component={Link}
-                to="/login"
-                variant="contained"
-                color="primary"
-                startIcon={<PersonOutlineIcon />}
-                sx={{
-                  fontWeight: 500,
-                  boxShadow: 'none',
-                  '&:hover': {
-                    boxShadow: 'none',
-                  },
-                }}
-              >
-                Login
-              </Button>
-            )}
+            <Button
+              component={Link}
+              to="/news"
+              sx={{
+                color: 'text.primary',
+                fontWeight: 500,
+                '&:hover': {
+                  color: 'primary.main',
+
+                },
+              }}
+            >
+              News
+            </Button>
+            {/* Login/Logout removed */}
           </Box>
         </Toolbar>
       </Container>

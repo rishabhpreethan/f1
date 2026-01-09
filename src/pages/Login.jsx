@@ -36,7 +36,7 @@ export default function Login() {
 
     try {
       console.log('Submitting data:', data);
-      const endpoint = activeTab === 'login' ? 'http://localhost:3001/api/login' : 'http://localhost:3001/api/register';
+      const endpoint = activeTab === 'login' ? '/api/login' : '/api/register';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
